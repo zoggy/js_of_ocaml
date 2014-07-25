@@ -71,7 +71,7 @@ class type cssStyleDeclaration = object
   method direction : js_string t prop
   method display : js_string t prop
   method emptyCells : js_string t prop
-  method fill : js_string t prop 
+  method fill : js_string t prop
   method font : js_string t prop
   method fontFamily : js_string t prop
   method fontSize : js_string t prop
@@ -444,6 +444,8 @@ class type linkElement = object
   method rev : js_string t prop
   method target : js_string t prop
   method _type : js_string t prop
+  method onload : ('self t, event t) event_listener prop
+  method onerror : ('self t, event t) event_listener prop
 end
 
 class type titleElement = object
@@ -470,6 +472,8 @@ class type styleElement = object
   method disabled : bool t prop
   method media : js_string t prop
   method _type : js_string t prop
+  method onload : ('self t, event t) event_listener prop
+  method onerror : ('self t, event t) event_listener prop
 end
 
 class type bodyElement = element
@@ -733,6 +737,8 @@ class type scriptElement = object
   method charset : js_string t prop
   method defer : bool t prop
   method src : js_string t prop
+  method onload : ('self t, event t) event_listener prop
+  method onerror : ('self t, event t) event_listener prop
   method _type : js_string t prop
   method async : bool t prop
 end
@@ -1203,6 +1209,13 @@ class type window = object
   method outerWidth : int optdef readonly_prop
   method outerHeight : int optdef readonly_prop
 
+  method onerror : (window t,
+                    (Js.js_string Js.t -> (* message *)
+                     Js.js_string Js.t -> (* url *)
+                     int -> (* line *)
+                     int Js.optdef -> (* col *)
+                     Js.error Js.t Js.optdef) (* Error *)
+                   ) event_listener prop
   method onload : (window t, event t) event_listener prop
   method onunload : (window t, event t) event_listener prop
   method onbeforeunload : (window t, event t) event_listener prop
@@ -1231,6 +1244,8 @@ class type frameSetElement = object
   inherit element
   method cols : js_string t prop
   method rows : js_string t prop
+  method onload : ('self t, event t) event_listener prop
+  method onerror : ('self t, event t) event_listener prop
 end
 
 class type frameElement = object
@@ -1244,6 +1259,8 @@ class type frameElement = object
   method scrolling : js_string t prop
   method src : js_string t prop
   method contentDocument : document t opt readonly_prop
+  method onload : ('self t, event t) event_listener prop
+  method onerror : ('self t, event t) event_listener prop
 end
 
 class type iFrameElement = object
@@ -1259,6 +1276,8 @@ class type iFrameElement = object
   method src : js_string t prop
   method contentDocument : document t opt readonly_prop
   method contentWindow  : window t readonly_prop
+  method onload : ('self t, event t) event_listener prop
+  method onerror : ('self t, event t) event_listener prop
 end
 
 (****)

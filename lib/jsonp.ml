@@ -41,8 +41,8 @@ let raw_call name uri error_cb user_cb =
   script##src <- Js.string uri;
   script##_type <- Js.string ("text/javascript");
   script##async <- Js._true;
-  (Js.Unsafe.coerce script)##onerror <- (fun x -> finalize (); error_cb x);
-  (Js.Unsafe.coerce script)##onload <- (fun x ->
+  script##onerror <- Dom_html.handler (fun x -> finalize (); error_cb x; Js._true);
+  script##onload <-  Dom_html.handler (fun x ->
       Lwt.async (fun () ->
           Lwt.bind (Lwt_js.sleep 1.) (fun () ->
               if !executed
@@ -50,7 +50,8 @@ let raw_call name uri error_cb user_cb =
               else (
                 Firebug.console##warn(Js.string "Jsonp: script loaded but callback not executed");
                 finalize (); error_cb x; Lwt.return_unit))
-        )
+        );
+      Js._true
     );
   let init () = ignore (Dom.appendChild (Dom_html.document##body) script) in
   init, finalize

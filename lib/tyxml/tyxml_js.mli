@@ -19,16 +19,19 @@
 
 (** Tyxml interface *)
 
-module Xml : Xml_sigs.T
+module type XML =
+  Xml_sigs.Wrapped
   with type uri = string
    and type event_handler = Dom_html.event Js.t -> bool
    and type mouse_event_handler = Dom_html.mouseEvent Js.t -> bool
    and type keyboard_event_handler = Dom_html.keyboardEvent Js.t -> bool
    and type elt = Dom.node Js.t
 
-module Xml_wrap : Xml_wrap.T
+module React_Wrap : Xml_wrap.T
   with type 'a t = 'a React.signal
    and type 'a tlist = 'a ReactiveData.RList.t
+
+module Xml : XML with module W = Xml_wrap.NoWrap
 
 module Util : sig
   val update_children : Dom.node Js.t -> Dom.node Js.t ReactiveData.RList.t -> unit
@@ -39,10 +42,13 @@ module Svg : Svg_sigs.Make(Xml).T
 module Html5 : Html5_sigs.Make(Xml)(Svg).T
 
 module R : sig
-  module Svg : Svg_sigs.MakeWrapped(Xml_wrap)(Xml).T
+  module Xml : XML with module W = React_Wrap
+
+  module Svg : Svg_sigs.Make(Xml).T
     with type +'a elt = 'a Svg.elt
      and type +'a attrib = 'a Svg.attrib
-  module Html5 : Html5_sigs.MakeWrapped(Xml_wrap)(Xml)(Svg).T
+
+  module Html5 : Html5_sigs.Make(Xml)(Svg).T
     with type +'a elt = 'a Html5.elt
      and type +'a attrib = 'a Html5.attrib
 end

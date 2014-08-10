@@ -20,8 +20,19 @@
 let js_string_of_float f = (Js.number_of_float f)##toString()
 let js_string_of_int i = (Js.number_of_float (float_of_int i))##toString()
 
+
+module type XML =
+  Xml_sigs.Wrapped
+  with type uri = string
+   and type event_handler = Dom_html.event Js.t -> bool
+   and type mouse_event_handler = Dom_html.mouseEvent Js.t -> bool
+   and type keyboard_event_handler = Dom_html.keyboardEvent Js.t -> bool
+   and type elt = Dom.node Js.t
+
+
 module Xml = struct
 
+  module W = Xml_wrap.NoWrap
   type 'a wrap = 'a
   type 'a list_wrap = 'a list
 
@@ -106,7 +117,7 @@ end
 module Svg = Svg_f.Make(Xml)
 module Html5 = Html5_f.Make(Xml)(Svg)
 
-module Xml_wrap = struct
+module React_Wrap = struct
   type 'a t = 'a React.signal
   type 'a tlist = 'a ReactiveData.RList.t
   let return = React.S.const
@@ -117,7 +128,6 @@ module Xml_wrap = struct
   let map f = ReactiveData.RList.map f
   let append x y = ReactiveData.RList.concat x y
 end
-
 
 module Util = struct
   open ReactiveData
@@ -181,9 +191,10 @@ end
 
 
 module R = struct
-  module Xml_wed = struct
-    type 'a wrap = 'a Xml_wrap.t
-    type 'a list_wrap = 'a Xml_wrap.tlist
+  module Xml = struct
+    module W = React_Wrap
+    type 'a wrap = 'a W.t
+    type 'a list_wrap = 'a W.tlist
     type uri = Xml.uri
     let string_of_uri = Xml.string_of_uri
     let uri_of_string = Xml.uri_of_string
@@ -195,9 +206,9 @@ module R = struct
 
     let attr name f s =
       let a = Dom_html.document##createAttribute(Js.string name) in
-      let _ = Xml_wrap.fmap (fun s -> match f s with
-          | None -> ()
-          | Some v -> a##value <- v) s in
+      let _ = W.fmap (fun s -> match f s with
+        | None -> ()
+        | Some v -> a##value <- v) s in
       name,Xml.Attr a
 
     let float_attrib name s = attr name (fun f -> Some (js_string_of_float f)) s
@@ -234,8 +245,8 @@ module R = struct
     let cdata_style = Xml.cdata_style
   end
 
-  module Svg = Svg_f.MakeWrapped(Xml_wrap)(Xml_wed)
-  module Html5 = Html5_f.MakeWrapped(Xml_wrap)(Xml_wed)(Svg)
+  module Svg = Svg_f.Make(Xml)
+  module Html5 = Html5_f.Make(Xml)(Svg)
 end
 
 module To_dom = Tyxml_cast.MakeTo(struct

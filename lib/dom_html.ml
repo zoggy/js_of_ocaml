@@ -310,7 +310,6 @@ and element = object
   method dir : js_string t prop
   method className : js_string t prop
   method classList : tokenList t readonly_prop
-  method cssText : js_string t prop
   method style : cssStyleDeclaration t prop
 
   method innerHTML : js_string t prop
@@ -576,6 +575,9 @@ class type textAreaElement = object ('self)
   method name : js_string t readonly_prop
   method readOnly : bool t prop
   method rows : int prop
+  method selectionDirection : js_string t prop
+  method selectionEnd : int prop
+  method selectionStart : int prop
   method tabIndex : int prop
   method _type : js_string t readonly_prop
   method value : js_string t prop
@@ -896,6 +898,8 @@ class type canvasElement = object
   method width : int prop
   method height : int prop
   method toDataURL : js_string t meth
+  method toDataURL_type : js_string t -> js_string t meth
+  method toDataURL_type_compression : js_string t -> float -> js_string t meth
   method getContext : js_string t -> canvasRenderingContext2D t meth
 end
 
@@ -1105,7 +1109,7 @@ class type location = object
   method protocol : js_string t prop
   method host : js_string t prop
   method hostname : js_string t prop
-  method origin : js_string t optdef prop
+  method origin : js_string t optdef readonly_prop
   method port : js_string t prop
   method pathname : js_string t prop
   method search : js_string t prop
@@ -1116,12 +1120,21 @@ class type location = object
   method reload : unit meth
 end
 
-let location_origin_safe (loc : location t) =
-  loc##protocol##concat_3
-    ((Js.string "//"), loc##hostname,
-     (let p = loc##port in
-      match Js.to_string p with "" -> p | s -> Js.string (":"^s))
+let location_origin (loc : location t) =
+  Optdef.case (loc##origin)
+    (fun () ->
+       let protocol = loc##protocol in
+       let hostname = loc##hostname in
+       let port     = loc##port in
+       if protocol##length = 0 && hostname##length = 0
+       then Js.string ""
+       else
+         let origin = protocol##concat_2 (Js.string "//", hostname) in
+         if port##length > 0
+         then origin##concat_2 (Js.string ":", loc##port)
+         else origin
     )
+    (fun o -> o)
 
 class type history = object
   method length : int readonly_prop
@@ -1175,6 +1188,11 @@ class type applicationCache = object
 
 end
 
+class type _URL = object
+  method createObjectURL : #File.blob t -> js_string t meth
+  method revokeObjectURL : js_string t -> unit meth
+end
+
 class type window = object
   inherit eventTarget
 
@@ -1222,6 +1240,13 @@ class type window = object
   method outerWidth : int optdef readonly_prop
   method outerHeight : int optdef readonly_prop
 
+  method getComputedStyle : #element t -> cssStyleDeclaration t meth
+  method getComputedStyle_pseudoElt :
+    #element t -> js_string t -> cssStyleDeclaration t meth
+
+  method atob : js_string t -> js_string t meth
+  method btoa : js_string t -> js_string t meth
+
   method onload : (window t, event t) event_listener prop
   method onunload : (window t, event t) event_listener prop
   method onbeforeunload : (window t, event t) event_listener prop
@@ -1234,7 +1259,10 @@ class type window = object
 
   method ononline : (window t, event t) event_listener writeonly_prop
   method onoffline : (window t, event t) event_listener writeonly_prop
+
+  method _URL : _URL t readonly_prop
 end
+
 
 let window : window t = Js.Unsafe.global (* The toplevel object *)
 

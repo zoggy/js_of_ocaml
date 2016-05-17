@@ -55,6 +55,7 @@ class type xmlHttpRequest = object ('self)
   method responseText : js_string t readonly_prop
   method responseXML : Dom.element Dom.document t opt readonly_prop
   method responseType : js_string t prop
+  method withCredentials : bool t writeonly_prop
 
   inherit File.progressEventTarget
   method ontimeout : ('self t, 'self File.progressEvent t) Dom.event_listener writeonly_prop
@@ -268,6 +269,11 @@ let perform_raw
   | JSON        -> req ## responseType <- (Js.string "json")
   | Text        -> req ## responseType <- (Js.string "text")
   | Default     -> req ## responseType <- (Js.string "")
+  end;
+
+  begin match with_credentials with
+    Some c -> req ## withCredentials <- Js.bool c
+  | None   -> ()
   end;
 
   (match content_type with

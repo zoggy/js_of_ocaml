@@ -30,6 +30,13 @@ function int_math_int64_pow_stub(base, exponent){
   return res;
 }
 
+//Provides: int_math_int_popcount
+function int_math_int_popcount(v) {
+  v = v - ((v >>> 1) & 0x55555555);
+  v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
+  return ((v + (v >>> 4) & 0xF0F0F0F) * 0x1010101) >>> 24;
+}
+
 //Provides: caml_hash_string
 //Requires: caml_hash
 function caml_hash_string(s) {
@@ -90,17 +97,6 @@ function core_kernel_gc_minor_words () { return 0 }
 function core_kernel_gc_promoted_words () { return 0 }
 //Provides: core_kernel_gc_top_heap_words
 function core_kernel_gc_top_heap_words () { return 0 }
-//Provides: caml_gc_counters
-function caml_gc_counters() { return [254,0,0,0] }
-//Provides: caml_gc_quick_stat
-function caml_gc_quick_stat(){
-  return [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
-}
-//Provides: caml_gc_stat
-function caml_gc_stat() {
-  return [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
-}
-
 //Provides: clear_caml_backtrace_pos
 function clear_caml_backtrace_pos () { return 0 }
 

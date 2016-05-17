@@ -43,6 +43,7 @@ val absolute_path : string -> string
 val read_file : string -> string
 
 val take : int -> 'a list -> 'a list * 'a list
+val last : 'a list -> 'a option
 
 val is_ascii : string -> bool
 val has_backslash : string -> bool
@@ -96,3 +97,6 @@ val obj_of_const : Lambda.structured_constant -> Obj.t
 
 val uncapitalize_ascii : string -> string
 val capitalize_ascii   : string -> string
+
+
+val find_loc_in_summary : string -> Ident.t -> Env.summary -> Location.t option

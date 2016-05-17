@@ -1,7 +1,14 @@
 
 opam pin add --no-action js_of_ocaml .
-opam pin add --no-action reactiveData 'https://github.com/ocsigen/reactiveData.git#master'
-opam install deriving tyxml reactiveData cppo base64
+opam install async_kernel.113.33.00 || true
+opam install deriving || true
+opam install tyxml reactiveData cppo base64
+
+case $(opam switch show) in
+    4.03*) opam pin add lwt https://github.com/Drup/lwt.git#4.03.0-no-oasis ;;
+    *) ;;
+esac
+
 opam install --deps-only js_of_ocaml
 opam install --verbose js_of_ocaml
 

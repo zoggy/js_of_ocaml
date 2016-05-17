@@ -303,6 +303,9 @@ class type ['a] js_array = object
   method length : int prop
 end
 
+val object_keys : 'a t -> js_string js_array t
+  (** Returns jsarray containing keys of the object as Object.keys does. *)
+
 val array_empty : 'a js_array t constr
   (** Constructor of [Array] objects.  The expression
       [jsnew array_empty ()] returns an empty array. *)
@@ -319,6 +322,12 @@ val array_get : 'a #js_array t -> int -> 'a optdef
 val array_set : 'a #js_array t -> int -> 'a -> unit
   (** Array update: [array_set a i v] puts [v] at index [i] in
       array [a]. *)
+
+val array_map  : ('a -> 'b) ->        'a #js_array t -> 'b #js_array t
+  (** Array map: [array_map f a] is [a##map(wrap_callback (fun elt idx arr -> f elt))]. *)
+
+val array_mapi : (int -> 'a -> 'b) -> 'a #js_array t -> 'b #js_array t
+  (** Array mapi: [array_mapi f a] is [a##map(wrap_callback (fun elt idx arr -> f idx elt))]. *)
 
 (** Specification of match result objects *)
 class type match_result = object
@@ -508,6 +517,7 @@ val error_constr : (js_string t -> error t) constr
       returns an [Error] object with the message [msg]. *)
 
 val string_of_error : error t -> string
+val raise_js_error  : error t -> 'a
 
 exception Error of error t
   (** The [Error] exception wrap javascript exceptions when catched by ocaml code.

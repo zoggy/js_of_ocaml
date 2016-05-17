@@ -23,6 +23,11 @@
 let split c s =
   Js.str_array (s##split (Js.string (String.make 1 c)))
 
+let split_2 c s =
+  let index = s##indexOf(Js.string (String.make 1 c)) in
+  if index < 0 then Js.undefined
+  else Js.def (s##slice(0,index),s##slice_end(index + 1) )
+
 exception Local_exn
 let interrupt () = raise Local_exn
 
@@ -94,20 +99,21 @@ let default_https_port = 443
 
 
 (* path *)
-let rec path_of_path_string s = (* inspired from: Ocsigen_lib *)
-  try
-    let length = String.length s in
-    if length = 0
-    then [""]
-    else
-      let pos_slash = String.index s '/' in
-      if pos_slash = 0
-      then "" :: path_of_path_string (String.sub s 1 (length-1))
-      else (String.sub s 0 pos_slash
-            :: (path_of_path_string
-                  (String.sub s (pos_slash+1) (length - pos_slash - 1)))
-           )
-  with Not_found -> [s]
+let path_of_path_string s =
+  let l = String.length s in
+  let rec aux i =
+    let j = try String.index_from s i '/'
+      with Not_found -> l
+    in
+    let word = String.sub s i (j-i) in
+    if j >= l
+    then [word]
+    else word :: aux (j+1)
+  in
+  match aux 0 with
+  | [ "" ] -> []
+  | [ "";"" ] -> [ "" ]
+  | a -> a
 
 
 (* Arguments *)
@@ -121,12 +127,7 @@ let encode_arguments l =
 let decode_arguments_js_string s =
   let arr = split '&' s in
   let len = arr##length in
-  let name_value_split s =
-    let arr_bis = split '=' s in
-    match arr_bis##length with
-      | 2 -> Js.def (Js.array_get arr_bis 0, Js.array_get arr_bis 1)
-      | _ -> Js.undefined
-  in
+  let name_value_split s = split_2 '=' s in
   let rec aux acc idx =
     if idx < 0
     then acc
@@ -136,10 +137,7 @@ let decode_arguments_js_string s =
                     (fun s -> Js.Optdef.case (name_value_split s)
                                 interrupt
                                 (fun (x, y) ->
-                                  let get t =
-                                    urldecode_js_string_string
-                                      (Js.Optdef.get t interrupt)
-                                  in
+                                  let get = urldecode_js_string_string in
                                   (get x, get y)
                                 )
                     )
@@ -158,9 +156,9 @@ let url_re =
                                     |\\[[0-9a-zA-Z.-]+\\]\
                                     |\\[[0-9A-Fa-f:.]+\\])?\
                                    (:([0-9]+))?\
-                                   /([^\\?#]*)\
+                                   (/([^\\?#]*)\
                                    (\\?([^#]*))?\
-                                   (#(.*))?$"
+                                   (#(.*))?)?$"
                   )
 let file_re =
   jsnew Js.regExp (Js.bytestring "^([Ff][Ii][Ll][Ee])://\
@@ -206,7 +204,7 @@ let url_of_js_string s =
 
        let path_str =
          urldecode_js_string_string
-           (Js.Optdef.get (Js.array_get res 5) interrupt)
+           (Js.Optdef.get (Js.array_get res 6) (fun () -> Js.bytestring ""))
        in
        let url = {
          hu_host        = urldecode_js_string_string
@@ -223,13 +221,13 @@ let url_of_js_string s =
          hu_path_string = path_str ;
          hu_arguments   = decode_arguments_js_string
                             (Js.Optdef.get
-                               (Js.array_get res 7)
+                               (Js.array_get res 8)
                                (fun () -> Js.bytestring "")
                             )
                             ;
          hu_fragment    = urldecode_js_string_string
                             (Js.Optdef.get
-                               (Js.array_get res 9)
+                               (Js.array_get res 10)
                                (fun () -> Js.bytestring "")
                             )
                             ;
@@ -308,7 +306,26 @@ let string_of_url = function
 module Current =
 struct
 
-  let l = Dom_html.window##location
+  let l =
+    if Js.Optdef.test (Js.Optdef.return (Dom_html.window##location))
+    then Dom_html.window##location
+    else
+      let empty = Js.string "" in
+      jsobject
+        val mutable href = empty
+        val mutable protocol = empty
+        val mutable host = empty
+        val mutable hostname = empty
+        val mutable port = empty
+        val mutable pathname = empty
+        val mutable search = empty
+        val mutable hash = empty
+        val origin = Js.undefined
+
+        method reload = ()
+        method replace _ = ()
+        method assign _ = ()
+      end
 
   let host = urldecode_js_string_string l##hostname
 

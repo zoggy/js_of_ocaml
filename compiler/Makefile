@@ -15,7 +15,7 @@ endif
 
 all: $(COMPILER) $(MINIFIER) $(FINDLIB_SUPPORT) man
 
-compilerlib: lib/compiler.cma lib/compiler.cmxa lib/compiler.cmxs
+compilerlib: lib/compiler.cma lib/compiler.cmxa lib/compiler.cmxs lib/compiler.cmx
 	cp compiler.cmi compiler.a lib/
 
 lib/%: %
@@ -29,14 +29,15 @@ OBJS=compiler_version.cmx \
      instr.cmx jsoo_subst.cmx pure_fun.cmx jsoo_deadcode.cmx \
      flow.cmx specialize.cmx specialize_js.cmx eval.cmx inline.cmx \
      tailcall.cmx freevars.cmx phisimpl.cmx \
-     js_traverse.cmx js_assign.cmx js_tailcall.cmx \
-     linker.cmx parse_bytecode.cmx generate.cmx driver.cmx \
+     js_traverse.cmx js_assign.cmx \
+     linker.cmx parse_bytecode.cmx jsoo_strongly_connected_components.cmx \
+     generate_closure.cmx generate.cmx driver.cmx \
      pseudoFs.cmx
 
 COMPOBJS=$(OBJS) $(FINDLIB_SUPPORT_OBJ) commonArg.cmx compileArg.cmx jsoo_compile.cmx
 MINIOBJS=$(OBJS) commonArg.cmx minifyArg.cmx minify.cmx
-OCAMLC=ocamlfind ocamlc     -w +A-4-7-9-37-38-41-44-45
-OCAMLOPT=ocamlfind ocamlopt -w +A-4-7-9-37-38-41-44-45
+OCAMLC=ocamlfind ocamlc -g  -w +A-4-7-9-37-38-41-44-45-58
+OCAMLOPT=ocamlfind ocamlopt -w +A-4-7-9-37-38-41-44-45-58
 $(COMPILER): jsoo_compile.$(BEST)
 	mv -f $< $@
 

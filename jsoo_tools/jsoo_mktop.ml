@@ -42,7 +42,7 @@ let add_syntax_mod p =
 
 let execute cmd =
   let s = String.concat " " cmd in
-  if !Jsoo_common.verbose then Printf.printf "+ %s\n" s;
+  if !Jsoo_common.verbose then Printf.printf "+ %s\n%!" s;
   let ret = Sys.command s in
   if ret <> 0
   then failwith (Printf.sprintf "Error: %s" s)
@@ -184,7 +184,7 @@ let _ =
         clean (tmp_output)
     end;
     let extra_include = List.map (fun x -> ["-I";Findlib.package_directory x]) ("compiler-libs" :: !pkgs) in
-    let extra_cmis = List.map (fun u -> ["--file";Printf.sprintf "%s.cmi:/cmis" u]) !export in
+    let extra_cmis = List.map (fun u -> ["--file";Printf.sprintf "%s.cmi:/cmis/" u]) !export in
     let extra = List.flatten (extra_include @ extra_cmis) in
     execute (["js_of_ocaml";"--toplevel";"--no-cmis";] @ extra @ !js_opt @ [!output]);
     do_clean ()

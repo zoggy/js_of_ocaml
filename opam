@@ -3,8 +3,9 @@ maintainer:   "dev@ocsigen.org"
 authors:      "Ocsigen team"
 bug-reports:  "https://github.com/ocsigen/js_of_ocaml/issues"
 homepage:     "http://ocsigen.org/js_of_ocaml"
-dev-repo:     "https://github.com/ocsigen/js_of_ocaml.git"
+dev-repo:     "git+https://github.com/ocsigen/js_of_ocaml.git"
 
+name: "js_of_ocaml"
 version: "dev"
 
 build:   [make "build"]
@@ -23,11 +24,12 @@ depends: [
   ("base-no-ppx" | "ppx_tools")
   "ocamlbuild"
 ]
-depopts: ["deriving" "ppx_deriving" "tyxml" "reactiveData" ]
+depopts: ["deriving" "ppx_deriving" "tyxml" "reactiveData" "async_kernel" ]
 conflicts: [
   "deriving"     {< "0.6"}
   "tyxml"        {< "3.6.0"}
   "ppx_deriving" {< "3.0"}
   "reactiveData" {< "0.2"}
+  "async_kernel" {< "113.33.00"}
 ]
 available: [ ocaml-version >= "4.00.0" ]

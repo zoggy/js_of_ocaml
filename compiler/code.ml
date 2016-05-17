@@ -41,13 +41,16 @@ module Var : sig
   val to_string : ?origin:t -> t -> string
 
   val fresh : unit -> t
+  val fresh_n : string -> t
   val fork : t -> t
 
   val count : unit -> int
 
   val compare : t -> t -> int
-
+  val get_loc : t -> Parse_info.t option
+  val loc : t -> Parse_info.t -> unit
   val name : t -> string -> unit
+  val get_name : t -> string option
   val propagate_name : t -> t -> unit
 
   val reset : unit -> unit
@@ -60,19 +63,37 @@ end = struct
   type t = int
 
   let printer = VarPrinter.create ()
+  let locations = Hashtbl.create 17
 
   let last_var = ref 0
 
   let reset () =
     last_var := 0;
+    Hashtbl.clear locations;
     VarPrinter.reset printer
 
   let to_string ?origin i = VarPrinter.to_string printer ?origin i
 
   let print f x = Format.fprintf f "v%d" x
-    (* Format.fprintf f "%s" (to_string x) *)
+  (* Format.fprintf f "%s" (to_string x) *)
 
-  let fresh () = incr last_var; !last_var
+  let name i nm = VarPrinter.name printer i nm
+  let loc i pi =
+    Hashtbl.add locations i pi(*;
+    Format.eprintf "loc for %d : %d-%d\n%!"
+                   i pi.Parse_info.line pi.Parse_info.col
+                               *)
+  let get_loc i=
+    try Some (Hashtbl.find locations i)
+    with Not_found -> None
+
+  let fresh () =
+    incr last_var;
+    !last_var
+  let fresh_n nm =
+    incr last_var;
+    name !last_var nm;
+    !last_var
 
   let count () = !last_var + 1
 
@@ -82,8 +103,16 @@ end = struct
 
   let compare v1 v2 = v1 - v2
 
-  let name i nm = VarPrinter.name printer i nm
-  let propagate_name i j = VarPrinter.propagate_name printer i j
+  let get_name i = VarPrinter.get_name printer i
+
+  let propagate_name i j =
+    VarPrinter.propagate_name printer i j;
+    match get_loc i with
+    | None -> ()
+    | Some l ->
+       (*       Format.eprintf "propagate loc\n%!";*)
+       loc j l
+
   let set_pretty b = VarPrinter.set_pretty printer b
   let set_stable b = VarPrinter.set_stable printer b
 
@@ -170,8 +199,8 @@ type last =
   | Branch of cont
   | Cond of cond * Var.t * cont * cont
   | Switch of Var.t * cont array * cont array
-  | Pushtrap of cont * Var.t * cont * addr
-  | Poptrap of cont
+  | Pushtrap of cont * Var.t * cont * AddrSet.t
+  | Poptrap of cont * addr
 
 type block =
   { params : Var.t list;
@@ -342,10 +371,11 @@ let print_last f l =
       Array.iteri
         (fun i cont -> Format.fprintf f "tag %d -> %a; " i print_cont cont) a2;
       Format.fprintf f "}"
-  | Pushtrap (cont1, x, cont2, pc) ->
-      Format.fprintf f "pushtrap %a handler %a => %a continuation %d"
-        print_cont cont1 Var.print x print_cont cont2 pc
-  | Poptrap cont ->
+  | Pushtrap (cont1, x, cont2, pcs) ->
+      Format.fprintf f "pushtrap %a handler %a => %a continuation %s"
+        print_cont cont1 Var.print x print_cont cont2
+        (String.concat ", " (List.map string_of_int (AddrSet.elements pcs)))
+  | Poptrap (cont,_) ->
       Format.fprintf f "poptrap %a" print_cont cont
 
 type xinstr = Instr of instr | Last of last
@@ -412,7 +442,7 @@ let fold_children blocks pc f accu =
   match block.branch with
     Return _ | Raise _ | Stop ->
       accu
-  | Branch (pc', _) | Poptrap (pc', _) | Pushtrap ((pc', _), _, _, _) ->
+  | Branch (pc', _) | Poptrap ((pc', _),_) | Pushtrap ((pc', _), _, _, _) ->
       f pc' accu
   | Cond (_, _, (pc1, _), (pc2, _)) ->
       f pc1 accu >> f pc1 >> f pc2
@@ -451,3 +481,66 @@ let eq (pc1, blocks1, _) (pc2, blocks2, _) =
       block1.body   = block2.body
     with Not_found -> false
   ) blocks1 true
+
+
+
+let with_invariant = Option.Debug.find "invariant"
+let check_defs=false
+let invariant  (_, blocks, _) =
+  if with_invariant () || true
+  then begin
+    let defs = Array.make (Var.count ()) false in
+    let check_cont (cont, args) =
+      let b = AddrMap.find cont blocks in
+      assert (List.length args >= List.length b.params)
+    in
+    let define x = if check_defs then
+        begin
+          assert (defs.(Var.idx x) = false);
+          defs.(Var.idx x) <- true
+        end
+    in
+    let check_expr = function
+        Const _ -> ()
+      | Apply (_, _, _) -> ()
+      | Block (_, _) -> ()
+      | Field (_, _) -> ()
+      | Closure (l, cont) ->
+        List.iter define l;
+        check_cont  cont
+      | Constant _ -> ()
+      | Prim (_, _) -> ()
+    in
+    let check_instr = function
+      | Let (x, e)    ->
+        define x; check_expr e
+      | Set_field (_,_i, _) -> ()
+      | Offset_ref (_x, _i) -> ()
+      | Array_set (_x, _y, _z) -> ()
+    in
+    let check_last = function
+        Return _ -> ()
+      | Raise _ -> ()
+      | Stop -> ()
+      | Branch cont -> check_cont cont
+      | Cond (_cond, _x, cont1, cont2) ->
+        check_cont cont1;
+        check_cont cont2;
+      | Switch (_x, a1, a2) ->
+        Array.iteri
+          (fun _ cont -> check_cont cont) a1;
+        Array.iteri
+          (fun _ cont -> check_cont cont) a2;
+      | Pushtrap (cont1, _x, cont2, _pcs) ->
+        check_cont cont1;
+        check_cont cont2
+      | Poptrap (cont,_) -> check_cont cont
+    in
+    AddrMap.iter (fun _pc block ->
+      List.iter define block.params;
+      Util.opt_iter (fun (_,cont) ->
+        check_cont cont) block.handler;
+      List.iter check_instr block.body;
+      check_last block.branch
+    ) blocks
+  end

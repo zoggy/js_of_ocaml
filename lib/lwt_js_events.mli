@@ -21,21 +21,16 @@
 (** Programming mouse or keyboard events handlers using Lwt *)
 
 (**
-
    Reminder:
    Event capturing starts with the outer most element in the DOM and
    works inwards to the HTML element the event took place on (capture phase)
    and then out again (bubbling phase).
 
-*)
-
-(**
-
    Examples of use:
 
    Waiting for a click on [elt1] before continuing:
 
-   {[lwt _ = Lwt_js_events.click elt1 in]}
+   {[let%lwt _ = Lwt_js_events.click elt1 in]}
 
    Doing some operation for each value change in input element [inp]:
 
@@ -46,24 +41,19 @@
    Defining a thread that waits for ESC key on an element:
 
    {[let rec esc elt =
-      lwt ev = keydown elt in
+      let%lwt ev = keydown elt in
       if ev##.keyCode = 27
       then Lwt.return ev
       else esc elt]}
 
    Waiting for a click or escape key before continuing:
 
-   {[lwt () =
-       Lwt.pick [(lwt _ = esc Dom_html.document in Lwt.return ());
-                 (lwt _ = click Dom_html.document in Lwt.return ())]
+   {[let%lwt () =
+       Lwt.pick [(let%lwt _ = esc Dom_html.document in Lwt.return ());
+                 (let%lwt _ = click Dom_html.document in Lwt.return ())]
      in ...]}
 
-
-*)
-
-
-
-(**  {2 Create Lwt threads for events} *)
+  {2 Create Lwt threads for events} *)
 
 (** [make_event ev target] creates a Lwt thread that waits
     for the event [ev] to happen on [target] (once).
@@ -275,6 +265,11 @@ val touchcancel :
 (** Returns when a CSS transition terminates on the element. *)
 val transitionend : #Dom_html.eventTarget Js.t -> unit Lwt.t
 
+val transitionends :
+  ?cancel_handler:bool ->
+  #Dom_html.eventTarget Js.t ->
+  (unit Lwt.t -> unit Lwt.t) -> unit Lwt.t
+
 val load : ?use_capture:bool ->
   #Dom_html.imageElement Js.t -> Dom_html.event Js.t Lwt.t
 val error : ?use_capture:bool ->
@@ -437,6 +432,22 @@ val selects :
   ?cancel_handler:bool ->
   ?use_capture:bool ->
   #Dom_html.eventTarget Js.t ->
+  (Dom_html.event Js.t -> unit Lwt.t -> unit Lwt.t) -> unit Lwt.t
+
+val loads :
+  ?cancel_handler:bool ->
+  ?use_capture:bool ->
+  #Dom_html.imageElement Js.t ->
+  (Dom_html.event Js.t -> unit Lwt.t -> unit Lwt.t) -> unit Lwt.t
+val errors :
+  ?cancel_handler:bool ->
+  ?use_capture:bool ->
+  #Dom_html.imageElement Js.t ->
+  (Dom_html.event Js.t -> unit Lwt.t -> unit Lwt.t) -> unit Lwt.t
+val aborts :
+  ?cancel_handler:bool ->
+  ?use_capture:bool ->
+  #Dom_html.imageElement Js.t ->
   (Dom_html.event Js.t -> unit Lwt.t -> unit Lwt.t) -> unit Lwt.t
 
 (** Returns when a repaint of the window by the browser starts.

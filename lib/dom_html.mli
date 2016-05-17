@@ -324,7 +324,7 @@ and element = object
   method classList : tokenList t readonly_prop
     (* Not supported by IE9 by default. Add +classList.js to the
        Js_of_ocaml command line for compatibility *)
-  method cssText : js_string t prop
+
   method style : cssStyleDeclaration t prop
 
   method innerHTML : js_string t prop
@@ -522,6 +522,9 @@ class type textAreaElement = object ('self)
   method name : js_string t readonly_prop (* Cannot be changed under IE *)
   method readOnly : bool t prop
   method rows : int prop
+  method selectionDirection : js_string t prop
+  method selectionEnd : int prop
+  method selectionStart : int prop
   method tabIndex : int prop
   method _type : js_string t readonly_prop (* Cannot be changed under IE *)
   method value : js_string t prop
@@ -846,6 +849,8 @@ class type canvasElement = object
   method width : int prop
   method height : int prop
   method toDataURL : js_string t meth
+  method toDataURL_type : js_string t -> js_string t meth
+  method toDataURL_type_compression : js_string t -> float -> js_string t meth
   method getContext : context -> canvasRenderingContext2D t meth
 end
 
@@ -1064,7 +1069,7 @@ class type location = object
   method protocol : js_string t prop
   method host : js_string t prop
   method hostname : js_string t prop
-  method origin : js_string t optdef prop
+  method origin : js_string t optdef readonly_prop
   method port : js_string t prop
   method pathname : js_string t prop
   method search : js_string t prop
@@ -1075,7 +1080,7 @@ class type location = object
   method reload : unit meth
 end
 
-val location_origin_safe : location t -> js_string t
+val location_origin : location t -> js_string t
 
 (** Browser history information *)
 class type history = object
@@ -1136,6 +1141,11 @@ type interval_id
 type timeout_id
 type animation_frame_request_id
 
+class type _URL = object
+  method createObjectURL : #File.blob t -> js_string t meth
+  method revokeObjectURL : js_string t -> unit meth
+end
+
 (** Specification of window objects *)
 class type window = object
   inherit eventTarget
@@ -1184,6 +1194,13 @@ class type window = object
   method outerWidth : int optdef readonly_prop
   method outerHeight : int optdef readonly_prop
 
+  method getComputedStyle : #element t -> cssStyleDeclaration t meth
+  method getComputedStyle_pseudoElt :
+    #element t -> js_string t -> cssStyleDeclaration t meth
+
+  method atob : js_string t -> js_string t meth
+  method btoa : js_string t -> js_string t meth
+
   method onload : (window t, event t) event_listener prop
   method onunload : (window t, event t) event_listener prop
   method onbeforeunload : (window t, event t) event_listener prop
@@ -1196,6 +1213,8 @@ class type window = object
 
   method ononline : (window t, event t) event_listener writeonly_prop
   method onoffline : (window t, event t) event_listener writeonly_prop
+
+  method _URL : _URL t readonly_prop
 end
 
 val window : window t

@@ -239,12 +239,23 @@ class type ['a] js_array = object
   method length : int prop
 end
 
+let object_constructor = Unsafe.global##_Object
+let object_keys o = object_constructor##keys(o)
+
 let array_constructor = Unsafe.global##_Array
 let array_empty = array_constructor
 let array_length = array_constructor
 
 let array_get : 'a #js_array t -> int -> 'a optdef = Unsafe.get
 let array_set : 'a #js_array t -> int -> 'a -> unit = Unsafe.set
+
+let array_map_poly :
+  'a #js_array t  ->
+  ('a -> int -> 'a #js_array t -> 'b) callback ->
+  'b #js_array t = fun a cb -> (Unsafe.coerce a)##map(cb)
+
+let array_map  f a = array_map_poly a (wrap_callback (fun x _idx _ -> f x))
+let array_mapi f a = array_map_poly a (wrap_callback (fun x idx _  -> f idx x))
 
 class type match_result = object
   inherit [js_string t] js_array
@@ -391,6 +402,8 @@ end
 exception Error of error t
 let error_constr = Unsafe.global##_Error
 let _ = Callback.register_exception "jsError" (Error (Unsafe.obj [||]))
+
+let raise_js_error = ((Unsafe.js_expr "(function (exn) { throw exn })") : error t -> 'a)
 
 class type json = object
   method parse : js_string t -> 'a meth

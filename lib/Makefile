@@ -11,9 +11,9 @@ OCAMLOPT=ocamlfind ocamlopt -w +A-4-7-9-37-38-41-44-45
 include ../Makefile.conf
 -include ../Makefile.local
 
+DERIVING_JSON=deriving_json.cma
 ifeq "${WITH_DERIVING}" "YES"
 PA_DERIVING=syntax/pa_deriving_Json.cmo
-DERIVING_JSON=deriving_json.cma
 ifeq "$(BEST)" "opt"
 DERIVING_JSON += deriving_json.cmxs
 ifeq "${NATDYNLINK}" "YES"
@@ -28,6 +28,10 @@ endif
 
 ifeq "${WITH_TYXML}${WITH_REACT}" "YESYES"
 TYXML_CMA=tyxml/tyxml_js.cma
+endif
+
+ifeq "${WITH_ASYNC}" "YES"
+ASYNC_CMA=async/async_js.cma
 endif
 
 ifeq "${WITH_TOPLEVEL}" "YES"
@@ -65,6 +69,7 @@ all: $(LIBNAME).cma log/logger.cma \
 	${DERIVING_JSON} \
 	${GRAPHICS_CMA} \
 	${TYXML_CMA} \
+	${ASYNC_CMA} \
 	$(PPX_EX) $(PPX_LIB) $(PPX_DERIVING_LIB) $(PPX_LIB_NDL) \
 	META
 
@@ -90,10 +95,10 @@ deriving_json.cmxs: deriving_json.cmxa
 	$(OCAMLOPT) -shared -linkall -o $@ $^
 
 syntax/pa_js.cmo: syntax/pa_js.ml
-	$(OCAMLC) -w -42 $(SAFESTRING) -package camlp4.extend,camlp4.quotations -syntax camlp4o -c $<
+	$(OCAMLC) -w -42-58 $(SAFESTRING) -package camlp4.extend,camlp4.quotations -syntax camlp4o -c $<
 
 syntax/pa_js.cmx: syntax/pa_js.ml
-	$(OCAMLOPT) -w -42 $(SAFESTRING) -package camlp4.extend,camlp4.quotations -syntax camlp4o -c $<
+	$(OCAMLOPT) -w -42-58 $(SAFESTRING) -package camlp4.extend,camlp4.quotations -syntax camlp4o -c $<
 
 syntax/pa_js.cmxs: syntax/pa_js.cmx
 	$(OCAMLOPT) -shared -linkall -o $@ $<
@@ -134,6 +139,15 @@ tyxml/%.cmi: tyxml/%.mli
 tyxml/tyxml_js.cma: tyxml/tyxml_cast.cmo tyxml/tyxml_js.cmo
 	$(OCAMLC) -a -o $@ $^
 
+
+async/async_js.cma: async/async_js.cmo
+	ocamlfind ocamlc -a -o $@ $^
+
+async/%.cmo: async/%.ml async/%.cmi syntax/pa_js.cmo
+	$(OCAMLC) -syntax camlp4o $(SAFESTRING) -package lwt.syntax,async_kernel -ppopt syntax/pa_js.cmo -I async -c $< -o $@
+
+async/%.cmi: async/%.mli
+	$(OCAMLC) -syntax camlp4o $(SAFESTRING) -package lwt.syntax,async_kernel -ppopt syntax/pa_js.cmo -I . -I async $< -o $@
 
 log/%.cmo: log/%.ml log/%.cmi syntax/pa_js.cmo
 	$(OCAMLC) -syntax camlp4o $(SAFESTRING) -package lwt,lwt.syntax,lwt.log -ppopt syntax/pa_js.cmo -I log -c $< -o $@
@@ -189,7 +203,7 @@ ppx/ppx_js.cmxs: ppx/ppx_js.cmxa
 	$(OCAMLOPT) -shared -g -o $@ $^
 
 $(PPX_EX): ppx/ppx_js.$(BEST)
-	mv -f $< $@
+	cp $< $@
 
 ppx/ppx_deriving_json.cmo: ppx/ppx_deriving_json.ml
 	$(OCAMLC) -w -40-42-48-27 -package ppx_deriving,ppx_tools,ppx_tools.metaquot -c $<
@@ -218,10 +232,10 @@ ppx/ppx_deriving_json.cmxs: ppx/ppx_deriving_json.cmx
 	ocamllex $<
 
 ${JSON_OBJS}: %.cmo: %.ml ${PA_DERIVING}
-	$(OCAMLC) $(SAFESTRING) -package deriving.syntax.common -syntax camlp4o -ppopt ${PA_DERIVING} -I deriving_json -c $<
+	$(OCAMLC) $(SAFESTRING) -I deriving_json -c $<
 
 ${JSON_OBJS:.cmo=.cmx}: %.cmx: %.ml ${PA_DERIVING}
-	$(OCAMLOPT) $(SAFESTRING) -package deriving.syntax.common -syntax camlp4o -ppopt ${PA_DERIVING} -I deriving_json -c $<
+	$(OCAMLOPT) $(SAFESTRING) -I deriving_json -c $<
 
 %$(OBJEXT): %.c
 	$(OCAMLC) -package lwt -c $<
@@ -238,18 +252,22 @@ clean:
 	rm -f *.cm[xioa] *.[ao] *.so *.cmx[sa]
 	rm -f syntax/*.cm[xioa] syntax/*.[ao] syntax/*.so syntax/*.cmx[sa]
 	rm -f ppx/*.cm[xioa] ppx/*.[ao] ppx/*.so ppx/*.cmx[sa]
+	rm -f async/*.cm[xioa] async/*.[ao] async/*.so async/*.cmx[sa]
 	rm -f log/*.cm[xioa] log/*.[ao] log/*.so log/*.cmx[sa]
 	rm -f tyxml/*.cm[xioa] tyxml/*.[ao] tyxml/*.so tyxml/*.cmx[sa]
 	rm -f graphics/*.cm[xioa] graphics/*.[ao] graphics/*.so graphics/*.cmx[sa]
 	rm -f toplevel/*.cm[xioa] toplevel/*.[ao] toplevel/*.so toplevel/*.cmx[sa]
 	rm -f deriving_json/*.cm[xioa] deriving_json/*.[ao] deriving_json/*.so
 	rm -f deriving_json/deriving_Json_lexer.ml
+	rm -f ppx/ppx_js.ml
+	rm -f ppx/ppx_deriving_json.ml
 	rm -f stubs.c
 	rm -f lib_version.ml
 	rm -f toplevel/jsooTopError.ml
 
 depend: syntax/pa_js.cmo ${PA_DERIVING} sys_js.ml toplevel/jsooTopError.ml ppx/ppx_js.ml
 	ocamldep -pp "camlp4o syntax/pa_js.cmo" *.ml *.mli > .depend
+	ocamldep -pp "camlp4o syntax/pa_js.cmo" -I async async/*.ml async/*.mli >> .depend
 	ocamldep -pp "camlp4o syntax/pa_js.cmo" -I log log/*.ml log/*.mli >> .depend
 	ocamldep -pp "camlp4o syntax/pa_js.cmo" -I toplevel toplevel/jsooTop.ml toplevel/jsooTopCamlp4.ml toplevel/*.mli >> .depend
 	ocamldep toplevel/jsooTopError.ml -I toplevel >> .depend

@@ -50,3 +50,66 @@ function bigstring_memcmp_stub(v_s1, v_s1_pos, v_s2, v_s2_pos, v_len){
   }
   return 0;
 }
+
+//Provides: bigstring_find
+//Requires: caml_ba_get_1
+function bigstring_find(bs, chr, pos, len){
+  while(len > 0){
+    if(caml_ba_get_1(bs,pos) == chr) return pos;
+    pos++;
+    len--;
+  }
+  return -1;
+}
+
+//Provides: bigstring_to_array_buffer mutable
+function bigstring_to_array_buffer(bs) {
+  return bs.data.buffer
+}
+
+//Provides: bigstring_of_array_buffer mutable
+//Requires: caml_ba_create_from
+function bigstring_of_array_buffer(ab) {
+  var ta = new joo_global_object.Uint8Array(ab);
+  return caml_ba_create_from(ta, null, 0, 12, 0, [ta.length])
+}
+
+//Provides: bigstring_marshal_data_size_stub mutable
+//Requires: caml_failwith, caml_ba_uint8_get32
+function bigstring_marshal_data_size_stub (s, ofs) {
+  if (caml_ba_uint8_get32(s, ofs) != (0x8495A6BE|0))
+    caml_failwith("Marshal.data_size: bad object");
+  return (caml_ba_uint8_get32(s, ofs + 4));
+}
+
+//Provides: bigstring_unmarshal_stub mutable
+//Requires: BigStringReader, caml_input_value_from_reader
+function bigstring_unmarshal_stub(s,ofs) {
+  var reader = new BigStringReader (s, typeof ofs=="number"?ofs:ofs[0]);
+  return caml_input_value_from_reader(reader, ofs)
+}
+
+
+//Provides: bigstring_marshal_stub mutable
+//Requires: caml_output_val, bigstring_alloc, caml_ba_set_1
+function bigstring_marshal_stub (v, _fl) {
+  /* ignores flags... */
+  var arr = caml_output_val (v);
+  var bs  = bigstring_alloc(0,arr.length);
+  for(var i = 0; i < arr.length; i++){
+    caml_ba_set_1(bs, i, arr[i]);
+  }
+  return bs;
+}
+
+//Provides: bigstring_marshal_blit_stub
+//Requires: caml_output_val, caml_failwith, caml_ba_set_1
+function bigstring_marshal_blit_stub (s, ofs, len, v, _fl) {
+  /* ignores flags... */
+  var t = caml_output_val (v);
+  if (t.length > len) caml_failwith ("Marshal.to_buffer: buffer overflow");
+  for(var i = 0; i < t.length; i++){
+    caml_ba_set_1(s, (i + ofs), t[i]);
+  }
+  return t.length;
+}

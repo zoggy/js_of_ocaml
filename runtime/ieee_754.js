@@ -17,22 +17,38 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
+//Provides: jsoo_floor_log2
+var log2_ok = Math.log2 && Math.log2(1.1235582092889474E+307) == 1020
+function jsoo_floor_log2(x) {
+    if(log2_ok) return Math.floor(Math.log2(x))
+    var i = 0;
+    if (x == 0) return -Infinity;
+    if(x>=1) {while (x>=2) {x/=2; i++} }
+    else {while (x < 1) {x*=2; i--} };
+    return i;
+}
+
 //Provides: caml_int64_bits_of_float const
+//Requires: jsoo_floor_log2
 function caml_int64_bits_of_float (x) {
   if (!isFinite(x)) {
     if (isNaN(x)) return [255, 1, 0, 0xfff0];
     return (x > 0)?[255,0,0,0x7ff0]:[255,0,0,0xfff0];
   }
-  var sign = (x>=0)?0:0x8000;
+  var sign = (x==0 && 1/x == -Infinity)?0x8000:(x>=0)?0:0x8000;
   if (sign) x = -x;
-  var exp = Math.floor(Math.LOG2E*Math.log(x)) + 1023;
+  // Int64.bits_of_float 1.1235582092889474E+307 = 0x7fb0000000000000L
+  // using Math.LOG2E*Math.log(x) in place of Math.log2 result in precision lost
+  var exp = jsoo_floor_log2(x) + 1023;
   if (exp <= 0) {
     exp = 0;
     x /= Math.pow(2,-1026);
   } else {
     x /= Math.pow(2,exp-1027);
-    if (x < 16) { x *= 2; exp -=1; }
-    if (exp == 0) { x /= 2; }
+    if (x < 16) {
+      x *= 2; exp -=1; }
+    if (exp == 0) {
+      x /= 2; }
   }
   var k = Math.pow(2,24);
   var r3 = x|0;
@@ -43,6 +59,67 @@ function caml_int64_bits_of_float (x) {
   r3 = (r3 &0xf) | sign | exp << 4;
   return [255, r1, r2, r3];
 }
+
+//Provides: caml_int32_bits_of_float const
+//Requires: jsoo_floor_log2
+function caml_int32_bits_of_float (x) {
+  var float32a = new joo_global_object.Float32Array(1);
+  float32a[0] = x;
+  var int32a = new joo_global_object.Int32Array(float32a.buffer);
+  return int32a[0] | 0;
+}
+
+//FP literals can be written using the hexadecimal
+//notation 0x<mantissa in hex>p<exponent> from ISO C99.
+//https://github.com/dankogai/js-hexfloat/blob/master/hexfloat.js
+//Provides: caml_hexstring_of_float const
+//Requires: caml_js_to_string, caml_str_repeat
+function caml_hexstring_of_float (x, prec, style) {
+  if (!isFinite(x)) {
+    if (isNaN(x)) return caml_js_to_string("nan");
+    return caml_js_to_string ((x > 0)?"infinity":"-infinity");
+  }
+  var sign = (x==0 && 1/x == -Infinity)?1:(x>=0)?0:1;
+  if(sign) x = -x;
+  var exp = 0;
+  if (x == 0) { }
+  else if (x < 1) {
+    while (x < 1 && exp > -1022)  { x *= 2; exp-- }
+  } else {
+    while (x >= 2) { x /= 2; exp++ }
+  }
+  var exp_sign = exp < 0 ? '' : '+';
+  var sign_str = '';
+  if (sign) sign_str = '-'
+  else {
+    switch(style){
+    case 43 /* '+' */: sign_str = '+'; break;
+    case 32 /* ' ' */: sign_str = ' '; break;
+    default: break;
+    }
+  }
+  if (prec >= 0 && prec < 13) {
+    /* If a precision is given, and is small, round mantissa accordingly */
+      var cst = Math.pow(2,prec * 4);
+      x = Math.round(x * cst) / cst;
+  }
+  var x_str = x.toString(16);
+  if(prec >= 0){
+      var idx = x_str.indexOf('.');
+    if(idx<0) {
+      x_str += '.' + caml_str_repeat(prec, '0');
+    }
+    else {
+      var size = idx+1+prec;
+      if(x_str.length < size)
+        x_str += caml_str_repeat(size - x_str.length, '0');
+      else
+        x_str = x_str.substr(0,size);
+    }
+  }
+  return caml_js_to_string (sign_str + '0x' + x_str + 'p' + exp_sign + exp.toString(10));
+}
+
 //Provides: caml_int64_float_of_bits const
 function caml_int64_float_of_bits (x) {
   var exp = (x[3] & 0x7fff) >> 4;
@@ -62,6 +139,15 @@ function caml_int64_float_of_bits (x) {
   if (x[3] & 0x8000) res = - res;
   return res;
 }
+
+//Provides: caml_int32_float_of_bits const
+function caml_int32_float_of_bits (x) {
+  var int32a = new joo_global_object.Int32Array(1);
+  int32a[0] = x;
+  var float32a = new joo_global_object.Float32Array(int32a.buffer);
+  return float32a[0];
+}
+
 //Provides: caml_classify_float const
 function caml_classify_float (x) {
   if (isFinite (x)) {
@@ -103,11 +189,12 @@ function caml_ldexp_float (x,exp) {
   return x;
 }
 //Provides: caml_frexp_float const
+//Requires: jsoo_floor_log2
 function caml_frexp_float (x) {
   if ((x == 0) || !isFinite(x)) return [0, x, 0];
   var neg = x < 0;
   if (neg) x = - x;
-  var exp = Math.floor(Math.LOG2E*Math.log(x)) + 1;
+  var exp = jsoo_floor_log2(x) + 1;
   x *= Math.pow(2,-exp);
   if (x < 0.5) { x *= 2; exp -= 1; }
   if (neg) x = - x;

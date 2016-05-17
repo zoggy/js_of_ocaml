@@ -108,12 +108,14 @@ let o1 : 'a -> 'a=
   tailcall >>
   phi >>
   flow >>
-  specialize >>
+  specialize' >>
+  eval >>
   inline >>
   deadcode >>
   print >>
   flow >>
-  specialize >>
+  specialize' >>
+  eval >>
   inline >>
   deadcode >>
   phi >>
@@ -201,8 +203,11 @@ let report_missing_primitives missing =
       end
       else missing
     ) missing (Lazy.force extra_js_files) in
-  Util.warn "Missing primitives:@.";
-  StringSet.iter (fun nm -> Util.warn "  %s@." nm) missing
+  if not (StringSet.is_empty missing)
+  then begin
+    Util.warn "Missing primitives:@.";
+    StringSet.iter (fun nm -> Util.warn "  %s@." nm) missing
+  end
 
 let gen_missing js missing =
     let open Javascript in
@@ -421,7 +426,7 @@ let pack ~wrap_with_fun ?(toplevel=false) js =
 let configure formatter p =
   let pretty = Option.Optim.pretty () in
   Pretty_print.set_compact formatter (not pretty);
-  Code.Var.set_pretty pretty;
+  Code.Var.set_pretty (pretty && not (Option.Optim.shortvar ()));
   Code.Var.set_stable (Option.Optim.stable_var ());
   p
 
@@ -431,6 +436,7 @@ let f ?(standalone=true) ?(wrap_with_fun=false) ?(profile=o1)
     ?toplevel ?linkall ?source_map ?custom_header formatter d =
   configure formatter >>
   profile >>
+  Generate_closure.f >>
   deadcode' >>
   generate d ?toplevel >>
 

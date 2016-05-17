@@ -367,6 +367,8 @@ function caml_compare_val (a, b, total) {
         return -1;
       } else if (typeof a != "number" && a && a.compare) {
         return a.compare(b,total);
+      } else if (typeof a == "function") {
+        caml_invalid_argument("equal: functional value");
       } else {
         if (a < b) return -1;
         if (a > b) return 1;
@@ -475,12 +477,14 @@ function caml_float_of_string(s) {
   s = s.replace(/_/g,"");
   res = +s;
   if (((s.length > 0) && (res === res)) || /^[+-]?nan$/i.test(s)) return res;
-  if(/^ *0x[0-9a-f_]+p[+-]?[0-9_]+/i.test(s)){
-    var pidx = s.indexOf('p');
-    pidx = (pidx==-1)?s.indexOf('P'):pidx;
-    var exp = +s.substring(pidx + 1);
-    res = +s.substring(0,pidx);
-    return res * Math.pow(2,exp);
+  var m = /^ *([+-]?)0x([0-9a-f]+)\.?([0-9a-f]*)p([+-]?[0-9]+)/i.exec(s);
+//            1        2             3           4
+  if(m){
+    var m3 = m[3].replace(/0+$/,'');
+    var mantissa = parseInt(m[1] + m[2] + m3, 16);
+    var exponent = (m[4]|0) - 4*m3.length;
+    res = mantissa * Math.pow(2, exponent);
+    return res;
   }
   if(/^\+?inf(inity)?$/i.test(s)) return Infinity;
   if(/^-inf(inity)?$/i.test(s)) return -Infinity;
@@ -597,7 +601,7 @@ function caml_format_int(fmt, i) {
 function caml_format_float (fmt, x) {
   var s, f = caml_parse_format(fmt);
   var prec = (f.prec < 0)?6:f.prec;
-  if (x < 0) { f.sign = -1; x = -x; }
+  if (x < 0 || (x == 0 && 1/x == -Infinity)) { f.sign = -1; x = -x; }
   if (isNaN(x)) { s = "nan"; f.filler = ' '; }
   else if (!isFinite(x)) { s = "inf"; f.filler = ' '; }
   else
@@ -843,6 +847,14 @@ function caml_sys_time () { return new Date() * 0.001 - caml_initial_time; }
 function caml_sys_get_config () {
   return [0, caml_new_string("Unix"), 32, 0];
 }
+
+//Provides: caml_sys_const_backend_type const
+//Requires: caml_new_string
+function caml_sys_const_backend_type () {
+  return [0, caml_new_string("js_of_ocaml")];
+}
+
+
 //Provides: caml_sys_random_seed mutable
 //Version: < 4.00
 //The function needs to return an array since OCaml 4.0...
@@ -964,14 +976,14 @@ function caml_backtrace_status () { return 0; }
 //Provides: caml_get_exception_backtrace const
 function caml_get_exception_backtrace () { return 0; }
 //Provides: caml_get_exception_raw_backtrace const
-function caml_get_exception_raw_backtrace () { return 0; }
+function caml_get_exception_raw_backtrace () { return [0]; }
 //Provides: caml_record_backtrace
 function caml_record_backtrace () { return 0; }
 //Provides: caml_convert_raw_backtrace const
 function caml_convert_raw_backtrace () { return 0; }
 //Provides: caml_get_current_callstack const
-function caml_get_current_callstack () { return 0; }
-//Provides: caml_sys_getenv
+function caml_get_current_callstack () { return [0]; }
+//Provides: caml_sys_getenv (const)
 //Requires: caml_raise_not_found
 //Requires: caml_js_to_string
 function caml_sys_getenv (name) {
@@ -1081,4 +1093,26 @@ function caml_list_of_js_array(a){
     l = [0,e,l];
   }
   return l
+}
+
+//Provides: caml_runtime_warnings
+var caml_runtime_warnings = 0;
+
+//Provides: caml_ml_enable_runtime_warnings
+//Requires: caml_runtime_warnings
+function caml_ml_enable_runtime_warnings (bool) {
+  caml_runtime_warnings = bool;
+  return 0;
+}
+
+//Provides: caml_ml_runtime_warnings_enabled
+//Requires: caml_runtime_warnings
+function caml_ml_runtime_warnings_enabled (_unit) {
+  return caml_runtime_warnings;
+}
+
+
+//Provides: caml_sys_isatty
+function caml_sys_isatty(_chan) {
+  return 0;
 }

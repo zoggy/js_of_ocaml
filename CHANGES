@@ -1,3 +1,69 @@
+===== dev =====
+
+ * Features/Changes
+ ** Misc: use ppx instead of camlp4
+
+===== 2.8.3 (2016-11-04) =====
+
+ * Features/Changes
+ ** Runtime: complete support for 4.04
+
+ * Bug fixes
+ ** Compiler: fix order of javascript files
+ ** Compiler: fix Javascript lexer (newline inside strings)
+ ** Compiler: fix bug in closure generation
+ ** Compiler: fix regression in closure generation (introduced in 2.8) (#531)
+ ** Compiler: fix code generation when static evaluation is disabled
+ 
+===== 2.8.2 (2016-09-10) =====
+
+ * Features/Changes
+ ** Lib: add Dom_html.Keyboard_code & Dom_html.Keyboard_key (Corwin de Boor)
+ ** Misc: update lib and runtime to work better with non browser environment
+ ** Misc: initial support for 4.04
+
+ * Bug fixes
+ ** Compiler: fix js output for x - -1
+ ** Compiler: fix parsing of annotations in the runtime
+ ** Compiler: fix javascript minifier
+ ** Compiler: various fixes for separate compilation.
+
+===== 2.8.1 (2016-07-01) =====
+
+ * Features/Changes
+ ** Compiler: reduce memory usage for shortvar
+ ** Lib: Add optional `prefix` arg to Jsonp.call
+ ** Ppx: add ppx_driver compatibility
+
+ * Bug fixes
+ ** Lib: fix Js.object_keys, Js.export
+ ** Lib: Async, do not ignore unhandled exceptions
+
+===== 2.8 (2016-06-16) =====
+ * Features/Changes
+ ** Compiler: allow dynlink of precompiled javascript file
+ ** Compiler: Improve tailcall optimization
+ ** Compiler: Improve pretty mode
+ ** Compiler: More inlining and static evaluation
+ ** Compiler: Better source map support, to leverage resolve_variable_names
+   in chrome DevTools
+ ** Compiler: preserve as much as possible the initial OCaml variable names
+ ** Lib: synchronize with tyxml 4.0.0
+ ** Lib: convert string/bigstring to/from typed_array
+ ** Lib: add Tyxml_js.Register API.
+ ** Lib: Support for Core_kernel and Async_kernel (32bit only).
+ ** Lib: Mutation observer.
+ ** Runtime: bigstring, caml_int32_bits_of_float, ..
+ ** Runtime: better nodejs integration
+
+ * Misc
+ ** Support for OCaml 4.03
+ ** Toplevel with ppx syntax
+
+ * Bug fixes
+ ** Compiler: Fix float printing
+ ** Compiler: fix separate compilation
+
 ===== 2.7 (2016-01-25) =====
 
  * Features/Changes
@@ -10,7 +76,7 @@
  ** Lib: add WebWorker API (Grégoire Henry)
  ** Lib: Allow to customize 'in_channel' with specific 'refiller' (Grégoire Henry)
  ** Lib: Synchronized tyxml 3.6.0
- 
+
  * BugFixes
  ** Compiler: Fix compilation of the [match with exception] construct
  ** Compiler: fix compat with the upcoming ocaml 4.03
@@ -19,11 +85,11 @@
  ** Runtime: Fix Big_int.square_big_int
  ** Runtime: graphics, fix draw_image with transparent pixel
  ** Ppx: fix for merlin
- 
+
 ===== 2.6 (2015-07-15) =====
 
  * Features/Changes
- ** Compiler: Findlib is optionnal
+ ** Compiler: Findlib is optional
  ** Compiler: improvement of sourcemap support (ie: inlinned sourcemap)
  ** Compiler: Support for separate compilation (compile cm{o,a} -> js)
  ** Compiler: more inlining
@@ -130,7 +196,7 @@
  * Features/Changes
  ** Runtime: bigarray comparison
  ** Compiler: allow to embed directory with -file dir_name=ext1,ext2:dest_path
- ** Compiler: can now output embeded files in a differant js file
+ ** Compiler: can now output embedded files in a differant js file
  ** Lib: js_of_ocaml.graphics
  ** Lib: Js.Unsafe.expr to embed JavasScript expression
     to be used instead of Js.Unsafe.variable (or eval_string)
@@ -272,7 +338,7 @@
 
  * Compiler:
  ** Add -I option to select directories containing cmi files
- ** Fix compilation of mutually recursive functions occuring in loops
+ ** Fix compilation of mutually recursive functions occurring in loops
  ** In Javascript output, parenthesize numbers when followed by a dot
  ** Fix order of evaluation bug
  ** Fix compilation of loops in 'try ... with' body (close #263)
@@ -362,7 +428,7 @@
    ** API to generate a function instead of a standalone program
    ** option to compile an OCaml toplevel
  * Libraries:
-   ** Add an optionnal JSON deriving class
+   ** Add an optional JSON deriving class
    ** Add Math.random binding
    ** Add scrollWidth/scrollHeight element methods to the DOM
    ** Add coercion function Dom_html.CoerceTo.element

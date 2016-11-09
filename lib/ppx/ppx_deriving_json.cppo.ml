@@ -511,7 +511,6 @@ let write_case (i, i', l) {Parsetree.pcd_name; pcd_args; pcd_loc} =
       write_tuple_contents vars args ~tag:i' ~poly:true
 #if OCAML_VERSION >= (4, 03, 0)
     | Pcstr_record args ->
-      let vars = fresh_vars (List.length args) in
       i,
       i' + 1,
       Some (pattern_of_record args),
@@ -596,12 +595,12 @@ let json_decls_of_record d l =
 let json_str_of_decl ({Parsetree.ptype_loc} as d) =
   Ast_helper.with_default_loc ptype_loc @@ fun () ->
   match d with
-  | { Parsetree.ptype_manifest = Some y } ->
-    json_decls_of_type d y
-  | { ptype_kind = Ptype_variant l } ->
+  | { Parsetree.ptype_kind = Ptype_variant l } ->
     json_decls_of_variant d l
   | { ptype_kind = Ptype_record l } ->
     json_decls_of_record d l
+  | { ptype_manifest = Some y } ->
+    json_decls_of_type d y
   | _ ->
     Location.raise_errorf "%s cannot be derived for %s" deriver
       (Ppx_deriving.mangle_type_decl (`Suffix "") d)

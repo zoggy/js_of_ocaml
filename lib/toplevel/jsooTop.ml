@@ -17,7 +17,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-open Compiler
+open Js_of_ocaml_compiler
 let split_primitives p =
   let len = String.length p in
   let rec split beg cur =
@@ -60,10 +60,13 @@ let setup = lazy (
     flush stdout; flush stderr;
     let res = Buffer.contents b in
     let res = String.concat "" !stubs ^ res in
-    Js.Unsafe.global##toplevelEval(res)
+    Js.Unsafe.global##toplevelEval res
   in
-  Js.Unsafe.global##toplevelCompile <- compile (*XXX HACK!*);
-  Js.Unsafe.global##toplevelEval <- (fun x -> Js.Unsafe.eval_string x);
+  Js.Unsafe.global##.toplevelCompile := compile (*XXX HACK!*);
+  Js.Unsafe.global##.toplevelEval := (fun x ->
+    let f : < .. > Js.t -> unit = Js.Unsafe.eval_string x in
+    (fun () -> f Js.Unsafe.global)
+  );
   ())
 
 let refill_lexbuf s p ppf buffer len =
@@ -96,6 +99,7 @@ let execute printval ?pp_code ?highlight_location  pp_answer s =
     while true do
       try
         let phr = !Toploop.parse_toplevel_phrase lb in
+        let phr = JsooTopPpx.preprocess_phrase phr in
         ignore(Toploop.execute_phrase printval pp_answer phr)
       with
       | End_of_file ->

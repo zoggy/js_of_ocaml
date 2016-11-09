@@ -22,7 +22,7 @@ ifneq ($(DERIVING),)
 DERIVING_SYNTAX = js_of_ocaml.deriving.syntax deriving.syntax.std
 endif
 
-ifneq ($(NO_SYNTAXES),1)
+ifneq ($(CAMLP4_SYNTAXES),)
 SYNTAXES= lwt.syntax js_of_ocaml.syntax $(DERIVING_SYNTAX)
 endif
 
@@ -35,6 +35,11 @@ PACKAGES= \
 	js_of_ocaml.tyxml \
 	js_of_ocaml.toplevel \
 	dynlink
+
+ifeq ($(WITH_PPX),YES)
+PACKAGES += js_of_ocaml.ppx.internal
+CPPO_OPT+= -D ppx
+endif
 
 ifeq ($(WITH_GRAPHICS),YES)
 JSFILES += +graphics.js
@@ -59,16 +64,16 @@ CPPO_OPT+= -D metaocaml
 endif
 
 #-jsopt "--pretty"
-MKTOP=jsoo_mktop -verbose $(SAFESTRING) \
+MKTOP=jsoo_mktop -verbose $(SAFESTRING) -g \
 	${addprefix -top-syntax , ${SYNTAXES}} \
 	-dont-export-unit gc \
 	-jsopt "--disable shortvar" \
 	${addprefix -export-package , ${PACKAGES}} \
-	${addprefix -export-unit , html5_types html5_sigs xml_wrap } \
+	${addprefix -export-unit , html_types html_sigs xml_wrap } \
 
 TOPLEVEL_NAME=toplevel
 TOPLEVEL_OBJS=colorize.cmo indent.cmo toplevel.cmo
-$(TOPLEVEL_NAME).js: $(TOPLEVEL_OBJS) examples.ml test_dynlink.cmo
+$(TOPLEVEL_NAME).js: $(TOPLEVEL_OBJS) examples.ml test_dynlink.cmo test_dynlink.js
 	$(MKTOP) \
 	$(BER) \
 	$(OCPINDENT) $(HIGLO) \
@@ -76,8 +81,12 @@ $(TOPLEVEL_NAME).js: $(TOPLEVEL_OBJS) examples.ml test_dynlink.cmo
 	${addprefix -jsopt , ${JSFILES}} \
 	${addprefix -jsopt , -I ./ --file examples.ml} \
 	${addprefix -jsopt , -I ./ --file test_dynlink.cmo} \
+	${addprefix -jsopt , -I ./ --file test_dynlink.js} \
 	-package base64 \
 	-o $(TOPLEVEL_NAME).byte
+
+test_dynlink.js: test_dynlink.cmo
+	js_of_ocaml test_dynlink.cmo --pretty
 
 EVAL_NAME=eval
 EVAL_OBJS=eval.cmo
@@ -99,10 +108,10 @@ colorize.cmo: colorize.cmi
 	cppo ${CPPO_OPT} $< -o $@
 
 %.cmi:%.mli
-	ocamlfind ocamlc -c -package js_of_ocaml,js_of_ocaml.tyxml $<
+	ocamlfind ocamlc -g -c -package js_of_ocaml,js_of_ocaml.tyxml $<
 %.cmo:%.ml
-	ocamlfind ocamlc -c -syntax camlp4o $(SAFESTRING) \
-		-package js_of_ocaml.syntax,lwt,js_of_ocaml.tyxml,js_of_ocaml.toplevel \
+	ocamlfind ocamlc -g -c $(SAFESTRING) \
+		-package js_of_ocaml.ppx,lwt,js_of_ocaml.tyxml,js_of_ocaml.toplevel \
 		-package base64 \
 		-I camlp4 \
 		$(OCPINDENT) $(HIGLO) \

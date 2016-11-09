@@ -124,6 +124,7 @@ class type cssStyleDeclaration = object
   method textIndent : js_string t prop
   method textTransform : js_string t prop
   method top : js_string t prop
+  method transform : js_string t prop
   method verticalAlign : js_string t prop
   method visibility : js_string t prop
   method whiteSpace : js_string t prop
@@ -166,13 +167,19 @@ end
 
 and keyboardEvent = object
   inherit event
-  method charCode : int optdef readonly_prop
-  method keyCode : int readonly_prop
-  method keyIdentifier : js_string t optdef readonly_prop
   method altKey : bool t readonly_prop
   method shiftKey : bool t readonly_prop
   method ctrlKey : bool t readonly_prop
   method metaKey : bool t readonly_prop
+  method location : int readonly_prop
+
+  method key : js_string t optdef readonly_prop
+  method code : js_string t optdef readonly_prop
+
+  method which : int optdef readonly_prop
+  method charCode : int optdef readonly_prop
+  method keyCode : int readonly_prop
+  method keyIdentifier : js_string t optdef readonly_prop
 end
 
 and mousewheelEvent = object (* All browsers but Firefox *)
@@ -441,6 +448,7 @@ class type linkElement = object
   inherit element
   method disabled : bool t prop
   method charset : js_string t prop
+  method crossorigin : js_string t prop
   method href : js_string t prop
   method hreflang : js_string t prop
   method media : js_string t prop
@@ -558,6 +566,9 @@ class type inputElement = object ('self)
   method select : unit meth
   method files : File.fileList t optdef readonly_prop
   method placeholder : js_string t writeonly_prop
+  method selectionDirection : js_string t prop
+  method selectionStart : int prop
+  method selectionEnd : int prop
   method onselect : ('self t, event t) event_listener prop
   method onchange : ('self t, event t) event_listener prop
   method oninput : ('self t, event t) event_listener prop
@@ -1096,6 +1107,7 @@ class type document = object
   method createRange : range t meth
   method readyState : js_string t readonly_prop
   method getElementsByClassName : js_string t -> element Dom.nodeList t meth
+  method activeElement : element t opt readonly_prop
 
   inherit eventTarget
 end
@@ -1121,17 +1133,17 @@ class type location = object
 end
 
 let location_origin (loc : location t) =
-  Optdef.case (loc##origin)
+  Optdef.case (loc##.origin)
     (fun () ->
-       let protocol = loc##protocol in
-       let hostname = loc##hostname in
-       let port     = loc##port in
-       if protocol##length = 0 && hostname##length = 0
+       let protocol = loc##.protocol in
+       let hostname = loc##.hostname in
+       let port     = loc##.port in
+       if protocol##.length = 0 && hostname##.length = 0
        then Js.string ""
        else
-         let origin = protocol##concat_2 (Js.string "//", hostname) in
-         if port##length > 0
-         then origin##concat_2 (Js.string ":", loc##port)
+         let origin = protocol##concat_2 (Js.string "//") hostname in
+         if port##.length > 0
+         then origin##concat_2 (Js.string ":") loc##.port
          else origin
     )
     (fun o -> o)
@@ -1210,6 +1222,7 @@ class type window = object
   method focus : unit meth
   method blur : unit meth
   method scroll : int -> int -> unit meth
+  method scrollBy : int -> int -> unit meth
 
   method sessionStorage : storage t optdef readonly_prop
   method localStorage : storage t optdef readonly_prop
@@ -1266,7 +1279,7 @@ end
 
 let window : window t = Js.Unsafe.global (* The toplevel object *)
 
-let document = window##document
+let document = window##.document
 let getElementById id =
   Js.Opt.case (document##getElementById (Js.string id))
     (fun () -> raise Not_found)
@@ -1314,7 +1327,7 @@ end
 
 let opt_iter x f = match x with None -> () | Some v -> f v
 
-let createElement (doc : document t) name = doc##createElement(Js.string name)
+let createElement (doc : document t) name = doc##createElement (Js.string name)
 let unsafeCreateElement doc name = Js.Unsafe.coerce (createElement doc name)
 
 let createElementSyntax = ref `Unknown
@@ -1326,19 +1339,19 @@ let rec unsafeCreateElementEx ?_type ?name doc elt =
     match !createElementSyntax with
       `Standard ->
         let res = Js.Unsafe.coerce (createElement doc elt) in
-        opt_iter _type (fun t -> res##_type <- t);
-        opt_iter name (fun n -> res##name <- n);
+        opt_iter _type (fun t -> res##._type := t);
+        opt_iter name (fun n -> res##.name := n);
         res
     | `Extended ->
-        let a = jsnew Js.array_empty () in
-        ignore (a##push_2(Js.string "<", Js.string elt));
+        let a = new%js Js.array_empty in
+        ignore (a##push_2 (Js.string "<") (Js.string elt));
         opt_iter _type (fun t ->
           ignore
-            (a##push_3(Js.string " type=\"", html_escape t, Js.string "\"")));
+            (a##push_3 (Js.string " type=\"") (html_escape t) (Js.string "\"")));
         opt_iter name (fun n ->
           ignore
-            (a##push_3(Js.string " name=\"", html_escape n, Js.string "\"")));
-        ignore (a##push(Js.string ">"));
+            (a##push_3 (Js.string " name=\"") (html_escape n) (Js.string "\"")));
+        ignore (a##push (Js.string ">"));
         Js.Unsafe.coerce (doc##createElement (a##join (Js.string "")))
     | `Unknown ->
         createElementSyntax :=
@@ -1346,9 +1359,9 @@ let rec unsafeCreateElementEx ?_type ?name doc elt =
             try
               let el : inputElement Js.t =
                 Js.Unsafe.coerce
-                  (document##createElement(Js.string "<input name=\"x\">")) in
-              el##tagName##toLowerCase() == Js.string "input" &&
-              el##name == Js.string "x"
+                  (document##createElement (Js.string "<input name=\"x\">")) in
+              el##.tagName##toLowerCase == Js.string "input" &&
+              el##.name == Js.string "x"
             with _ ->
               false
           then
@@ -1449,10 +1462,10 @@ exception Canvas_not_available
 
 let createCanvas doc : canvasElement t =
   let c = unsafeCreateElement doc "canvas" in
-  if not (Opt.test c##getContext) then raise Canvas_not_available;
+  if not (Opt.test c##.getContext) then raise Canvas_not_available;
   c
 
-let html_element : htmlElement t constr = Js.Unsafe.global ## _HTMLElement
+let html_element : htmlElement t constr = Js.Unsafe.global ##. _HTMLElement
 
 module CoerceTo = struct
   let element : #Dom.node Js.t -> element Js.t Js.opt =
@@ -1460,7 +1473,7 @@ module CoerceTo = struct
       (* ie < 9 does not have HTMLElement: we have to cheat to check
 	 that something is an html element *)
       (fun e ->
-	if def ((Js.Unsafe.coerce e)##innerHTML) == undefined then
+	if def ((Js.Unsafe.coerce e)##.innerHTML) == undefined then
 	  Js.null
 	else Js.some (Js.Unsafe.coerce e))
     else
@@ -1470,7 +1483,7 @@ module CoerceTo = struct
 	else Js.null)
 
   let unsafeCoerce tag (e : #element t) =
-    if e##tagName##toLowerCase() == Js.string tag then
+    if e##.tagName##toLowerCase == Js.string tag then
       Js.some (Js.Unsafe.coerce e)
     else
       Js.null
@@ -1541,14 +1554,14 @@ module CoerceTo = struct
       Js.some (Js.Unsafe.coerce ev)
     else Js.null
 
-  let mouseEvent ev = unsafeCoerceEvent (Js.Unsafe.global##_MouseEvent) ev
+  let mouseEvent ev = unsafeCoerceEvent (Js.Unsafe.global##._MouseEvent) ev
   let keyboardEvent ev =
-    unsafeCoerceEvent (Js.Unsafe.global##_KeyboardEvent) ev
-  let wheelEvent ev = unsafeCoerceEvent (Js.Unsafe.global##_WheelEvent) ev
+    unsafeCoerceEvent (Js.Unsafe.global##._KeyboardEvent) ev
+  let wheelEvent ev = unsafeCoerceEvent (Js.Unsafe.global##._WheelEvent) ev
   let mouseScrollEvent ev =
-    unsafeCoerceEvent (Js.Unsafe.global##_MouseScrollEvent) ev
+    unsafeCoerceEvent (Js.Unsafe.global##._MouseScrollEvent) ev
   let popStateEvent ev =
-    unsafeCoerceEvent (Js.Unsafe.global##_PopStateEvent) ev
+    unsafeCoerceEvent (Js.Unsafe.global##._PopStateEvent) ev
 
 end
 
@@ -1557,39 +1570,39 @@ end
 let eventTarget = Dom.eventTarget
 
 let eventRelatedTarget (e : #mouseEvent t) =
-  Optdef.get (e##relatedTarget) (fun () ->
-  match Js.to_string (e##_type) with
-    "mouseover" -> Optdef.get (e##fromElement) (fun () -> assert false)
-  | "mouseout"  -> Optdef.get (e##toElement) (fun () -> assert false)
+  Optdef.get (e##.relatedTarget) (fun () ->
+  match Js.to_string (e##._type) with
+    "mouseover" -> Optdef.get (e##.fromElement) (fun () -> assert false)
+  | "mouseout"  -> Optdef.get (e##.toElement) (fun () -> assert false)
   | _           -> Js.null)
 
 let eventAbsolutePosition' (e : #mouseEvent t) =
-  let body = document##body in
-  let html = document##documentElement in
-  (e##clientX + body##scrollLeft + html##scrollLeft,
-   e##clientY + body##scrollTop + html##scrollTop)
+  let body = document##.body in
+  let html = document##.documentElement in
+  (e##.clientX + body##.scrollLeft + html##.scrollLeft,
+   e##.clientY + body##.scrollTop + html##.scrollTop)
 
 let eventAbsolutePosition (e : #mouseEvent t) =
-  Optdef.case (e##pageX) (fun () -> eventAbsolutePosition' e) (fun x ->
-  Optdef.case (e##pageY) (fun () -> eventAbsolutePosition' e) (fun y ->
+  Optdef.case (e##.pageX) (fun () -> eventAbsolutePosition' e) (fun x ->
+  Optdef.case (e##.pageY) (fun () -> eventAbsolutePosition' e) (fun y ->
   (x, y)))
 
 let elementClientPosition (e : #element t) =
-  let r = e##getBoundingClientRect () in
-  let body = document##body in
-  let html = document##documentElement in
-  (truncate r##left - body##clientLeft - html##clientLeft,
-   truncate r##top - body##clientTop - html##clientTop)
+  let r = e##getBoundingClientRect in
+  let body = document##.body in
+  let html = document##.documentElement in
+  (truncate r##.left - body##.clientLeft - html##.clientLeft,
+   truncate r##.top - body##.clientTop - html##.clientTop)
 
 let getDocumentScroll () =
-  let body = document##body in
-  let html = document##documentElement in
-  (body##scrollLeft + html##scrollLeft, body##scrollTop + html##scrollTop)
+  let body = document##.body in
+  let html = document##.documentElement in
+  (body##.scrollLeft + html##.scrollLeft, body##.scrollTop + html##.scrollTop)
 
 let buttonPressed (ev : #mouseEvent Js.t) =
-  Js.Optdef.case (ev##which)
+  Js.Optdef.case (ev##.which)
     (fun () ->
-      match ev##button with
+      match ev##.button with
 	| 1 -> Left_button
 	| 2 -> Right_button
 	| 4 -> Middle_button
@@ -1598,7 +1611,7 @@ let buttonPressed (ev : #mouseEvent Js.t) =
 
 let hasMousewheelEvents () =
   let d = createDiv document in
-  d##setAttribute(Js.string "onmousewheel", Js.string "return;");
+  d##setAttribute (Js.string "onmousewheel") (Js.string "return;");
   Js.typeof (Js.Unsafe.get d (Js.string "onmousewheel")) ==
   Js.string "function"
 
@@ -1607,21 +1620,332 @@ let addMousewheelEventListener e h capt =
     addEventListener e Event.mousewheel
       (handler
          (fun (e : mousewheelEvent t) ->
-            let dx = - Optdef.get (e##wheelDeltaX) (fun () -> 0) / 40 in
+            let dx = - Optdef.get (e##.wheelDeltaX) (fun () -> 0) / 40 in
             let dy =
-              - Optdef.get (e##wheelDeltaY) (fun () -> e##wheelDelta) / 40 in
+              - Optdef.get (e##.wheelDeltaY) (fun () -> e##.wheelDelta) / 40 in
             h (e :> mouseEvent t) ~dx ~dy))
       capt
   else
     addEventListener e Event._DOMMouseScroll
       (handler
          (fun (e : mouseScrollEvent t) ->
-            let d = e##detail in
-            if e##axis == e##_HORIZONTAL_AXIS then
+            let d = e##.detail in
+            if e##.axis == e##._HORIZONTAL_AXIS then
               h (e :> mouseEvent t) ~dx:d ~dy:0
             else
               h (e :> mouseEvent t) ~dx:0 ~dy:d))
       capt
+
+(*****)
+
+module Keyboard_code = struct
+  type t =
+    | Unidentified
+    (* Alphabetic Characters *)
+    | KeyA                | KeyB                | KeyC                | KeyD
+    | KeyE                | KeyF                | KeyG                | KeyH
+    | KeyI                | KeyJ                | KeyK                | KeyL
+    | KeyM                | KeyN                | KeyO                | KeyP
+    | KeyQ                | KeyR                | KeyS                | KeyT
+    | KeyU                | KeyV                | KeyW                | KeyX
+    | KeyY                | KeyZ
+    (* Digits *)
+    | Digit0              | Digit1              | Digit2              | Digit3
+    | Digit4              | Digit5              | Digit6              | Digit7
+    | Digit8              | Digit9              | Minus               | Equal
+    (* Whitespace *)
+    | Tab                 | Enter               | Space
+    (* Editing *)
+    | Escape              | Backspace           | Insert              | Delete
+    | CapsLock
+    (* Misc Printable *)
+    | BracketLeft         | BracketRight        | Semicolon           | Quote
+    | Backquote           | Backslash           | Comma               | Period
+    | Slash
+    (* Function keys *)
+    | F1                  | F2                  | F3                  | F4
+    | F5                  | F6                  | F7                  | F8
+    | F9                  | F10                 | F11                 | F12
+    (* Numpad keys *)
+    | Numpad0             | Numpad1             | Numpad2             | Numpad3
+    | Numpad4             | Numpad5             | Numpad6             | Numpad7
+    | Numpad8             | Numpad9             | NumpadMultiply      | NumpadSubtract
+    | NumpadAdd           | NumpadDecimal       | NumpadEqual         | NumpadEnter
+    | NumpadDivide        | NumLock
+    (* Modifier keys *)
+    | ControlLeft         | ControlRight        | MetaLeft            | MetaRight
+    | ShiftLeft           | ShiftRight          | AltLeft             | AltRight
+    (* Arrow keys *)
+    | ArrowLeft           | ArrowRight          | ArrowUp             | ArrowDown
+    (* Navigation *)
+    | PageUp              | PageDown            | Home                | End
+    (* Sound *)
+    | VolumeMute          | VolumeDown          | VolumeUp
+    (* Media *)
+    | MediaTrackPrevious  | MediaTrackNext      | MediaPlayPause      | MediaStop
+    (* Browser special *)
+    | ContextMenu         | BrowserSearch       | BrowserHome         | BrowserFavorites
+    | BrowserRefresh      | BrowserStop         | BrowserForward      | BrowserBack
+    (* Misc *)
+    | OSLeft              | OSRight             | ScrollLock          | PrintScreen
+    | IntlBackslash       | IntlYen             | Pause
+
+  let try_code v =
+    match Js.to_string v with
+    (* Alphabetic Characters *)
+    | "KeyA"                 -> KeyA                | "KeyB"                 -> KeyB
+    | "KeyC"                 -> KeyC                | "KeyD"                 -> KeyD
+    | "KeyE"                 -> KeyE                | "KeyF"                 -> KeyF
+    | "KeyG"                 -> KeyG                | "KeyH"                 -> KeyH
+    | "KeyI"                 -> KeyI                | "KeyJ"                 -> KeyJ
+    | "KeyK"                 -> KeyK                | "KeyL"                 -> KeyL
+    | "KeyM"                 -> KeyM                | "KeyN"                 -> KeyN
+    | "KeyO"                 -> KeyO                | "KeyP"                 -> KeyP
+    | "KeyQ"                 -> KeyQ                | "KeyR"                 -> KeyR
+    | "KeyS"                 -> KeyS                | "KeyT"                 -> KeyT
+    | "KeyU"                 -> KeyU                | "KeyV"                 -> KeyV
+    | "KeyW"                 -> KeyW                | "KeyX"                 -> KeyX
+    | "KeyY"                 -> KeyY                | "KeyZ"                 -> KeyZ
+    (* Digits *)
+    | "Digit0"               -> Digit0              | "Digit1"               -> Digit1
+    | "Digit2"               -> Digit2              | "Digit3"               -> Digit3
+    | "Digit4"               -> Digit4              | "Digit5"               -> Digit5
+    | "Digit6"               -> Digit6              | "Digit7"               -> Digit7
+    | "Digit8"               -> Digit8              | "Digit9"               -> Digit9
+    | "Minus"                -> Minus               | "Equal"                -> Equal
+    (* Whitespace *)
+    | "Tab"                  -> Tab                 | "Enter"                -> Enter
+    | "Space"                -> Space
+    (* Editing *)
+    | "Escape"               -> Escape              | "Backspace"            -> Backspace
+    | "Insert"               -> Insert              | "Delete"               -> Delete
+    | "CapsLock"             -> CapsLock
+    (* Misc Printable *)
+    | "BracketLeft"          -> BracketLeft         | "BracketRight"         -> BracketRight
+    | "Semicolon"            -> Semicolon           | "Quote"                -> Quote
+    | "Backquote"            -> Backquote           | "Backslash"            -> Backslash
+    | "Comma"                -> Comma               | "Period"               -> Period
+    | "Slash"                -> Slash
+    (* Function keys *)
+    | "F1"                   -> F1                  | "F2"                   -> F2
+    | "F3"                   -> F3                  | "F4"                   -> F4
+    | "F5"                   -> F5                  | "F6"                   -> F6
+    | "F7"                   -> F7                  | "F8"                   -> F8
+    | "F9"                   -> F9                  | "F10"                  -> F10
+    | "F11"                  -> F11                 | "F12"                  -> F12
+    (* Numpad keys *)
+    | "Numpad0"              -> Numpad0             | "Numpad1"              -> Numpad1
+    | "Numpad2"              -> Numpad2             | "Numpad3"              -> Numpad3
+    | "Numpad4"              -> Numpad4             | "Numpad5"              -> Numpad5
+    | "Numpad6"              -> Numpad6             | "Numpad7"              -> Numpad7
+    | "Numpad8"              -> Numpad8             | "Numpad9"              -> Numpad9
+    | "NumpadMultiply"       -> NumpadMultiply      | "NumpadSubtract"       -> NumpadSubtract
+    | "NumpadAdd"            -> NumpadAdd           | "NumpadDecimal"        -> NumpadDecimal
+    | "NumpadEqual"          -> NumpadEqual         | "NumpadEnter"          -> NumpadEnter
+    | "NumpadDivide"         -> NumpadDivide        | "NumLock"              -> NumLock
+    (* Modifier keys *)
+    | "ControlLeft"          -> ControlLeft         | "ControlRight"         -> ControlRight
+    | "MetaLeft"             -> MetaLeft            | "MetaRight"            -> MetaRight
+    | "ShiftLeft"            -> ShiftLeft           | "ShiftRight"           -> ShiftRight
+    | "AltLeft"              -> AltLeft             | "AltRight"             -> AltRight
+    (* Arrow keys *)
+    | "ArrowLeft"            -> ArrowLeft           | "ArrowRight"           -> ArrowRight
+    | "ArrowUp"              -> ArrowUp             | "ArrowDown"            -> ArrowDown
+    (* Navigation *)
+    | "PageUp"               -> PageUp              | "PageDown"             -> PageDown
+    | "Home"                 -> Home                | "End"                  -> End
+    (* Sound *)
+    | "VolumeMute"           -> VolumeMute          | "VolumeDown"           -> VolumeDown
+    | "VolumeUp"             -> VolumeUp
+    (* Media *)
+    | "MediaTrackPrevious"   -> MediaTrackPrevious  | "MediaTrackNext"       -> MediaTrackNext
+    | "MediaPlayPause"       -> MediaPlayPause      | "MediaStop"            -> MediaStop
+    (* Browser special *)
+    | "ContextMenu"          -> ContextMenu         | "BrowserSearch"        -> BrowserSearch
+    | "BrowserHome"          -> BrowserHome         | "BrowserFavorites"     -> BrowserFavorites
+    | "BrowserRefresh"       -> BrowserRefresh      | "BrowserStop"          -> BrowserStop
+    | "BrowserForward"       -> BrowserForward      | "BrowserBack"          -> BrowserBack
+    (* Misc *)
+    | "OSLeft"               -> OSLeft              | "OSRight"              -> OSRight
+    | "ScrollLock"           -> ScrollLock          | "PrintScreen"          -> PrintScreen
+    | "IntlBackslash"        -> IntlBackslash       | "IntlYen"              -> IntlYen
+    | "Pause"                -> Pause
+    | _ -> Unidentified
+
+  let try_key_code_left = function
+    | 16 -> ShiftLeft
+    | 17 -> ControlLeft
+    | 18 -> AltLeft
+    | 91 -> MetaLeft
+    | _  -> Unidentified
+
+  let try_key_code_right = function
+    | 16 -> ShiftRight
+    | 17 -> ControlRight
+    | 18 -> AltRight
+    | 91 -> MetaRight
+    | _  -> Unidentified
+
+  let try_key_code_numpad = function
+    | 46  -> NumpadDecimal
+    | 45  -> Numpad0
+    | 35  -> Numpad1
+    | 40  -> Numpad2
+    | 34  -> Numpad3
+    | 37  -> Numpad4
+    | 12  -> Numpad5
+    | 39  -> Numpad6
+    | 36  -> Numpad7
+    | 38  -> Numpad8
+    | 33  -> Numpad9
+    | 13  -> NumpadEnter
+    | 111 -> NumpadDivide
+    | 107 -> NumpadAdd
+    | 109 -> NumpadSubtract
+    | 106 -> NumpadMultiply
+    | 110 -> NumpadDecimal
+    | 96  -> Numpad0
+    | 97  -> Numpad1
+    | 98  -> Numpad2
+    | 99  -> Numpad3
+    | 100 -> Numpad4
+    | 101 -> Numpad5
+    | 102 -> Numpad6
+    | 103 -> Numpad7
+    | 104 -> Numpad8
+    | 105 -> Numpad9
+    | _   -> Unidentified
+
+  let try_key_code_normal = function
+    | 27  -> Escape
+    | 112 -> F1
+    | 113 -> F2
+    | 114 -> F3
+    | 115 -> F4
+    | 116 -> F5
+    | 117 -> F6
+    | 118 -> F7
+    | 119 -> F8
+    | 120 -> F9
+    | 121 -> F10
+    | 122 -> F11
+    | 123 -> F12
+    | 42  -> PrintScreen
+    | 145 -> ScrollLock
+    | 19  -> Pause
+    | 192 -> Backquote
+    | 49  -> Digit1
+    | 50  -> Digit2
+    | 51  -> Digit3
+    | 52  -> Digit4
+    | 53  -> Digit5
+    | 54  -> Digit6
+    | 55  -> Digit7
+    | 56  -> Digit8
+    | 57  -> Digit9
+    | 48  -> Digit0
+    | 189 -> Minus
+    | 187 -> Equal
+    | 8   -> Backspace
+    | 9   -> Tab
+    | 81  -> KeyQ
+    | 87  -> KeyW
+    | 69  -> KeyE
+    | 82  -> KeyR
+    | 84  -> KeyT
+    | 89  -> KeyY
+    | 85  -> KeyU
+    | 73  -> KeyI
+    | 79  -> KeyO
+    | 80  -> KeyP
+    | 219 -> BracketLeft
+    | 221 -> BracketRight
+    | 220 -> Backslash
+    | 20  -> CapsLock
+    | 65  -> KeyA
+    | 83  -> KeyS
+    | 68  -> KeyD
+    | 70  -> KeyF
+    | 71  -> KeyG
+    | 72  -> KeyH
+    | 74  -> KeyJ
+    | 75  -> KeyK
+    | 76  -> KeyL
+    | 186 -> Semicolon
+    | 222 -> Quote
+    | 13  -> Enter
+    | 90  -> KeyZ
+    | 88  -> KeyX
+    | 67  -> KeyC
+    | 86  -> KeyV
+    | 66  -> KeyB
+    | 78  -> KeyN
+    | 77  -> KeyM
+    | 188 -> Comma
+    | 190 -> Period
+    | 191 -> Slash
+    | 32  -> Space
+    | 93  -> ContextMenu
+    | 45  -> Insert
+    | 36  -> Home
+    | 33  -> PageUp
+    | 46  -> Delete
+    | 35  -> End
+    | 34  -> PageDown
+    | 37  -> ArrowLeft
+    | 40  -> ArrowDown
+    | 39  -> ArrowRight
+    | 38  -> ArrowUp
+    | _   -> Unidentified
+
+  let make_unidentified _ = Unidentified
+
+  let try_next value f = function
+    | Unidentified -> Optdef.case value make_unidentified f
+    | v -> v
+
+  let run_next value f = function
+    | Unidentified -> f value
+    | v -> v
+
+  let get_key_code evt = evt##.keyCode
+
+  let try_key_location evt =
+    match evt##.location with
+    | 1 -> run_next (get_key_code evt) try_key_code_left
+    | 2 -> run_next (get_key_code evt) try_key_code_right
+    | 3 -> run_next (get_key_code evt) try_key_code_numpad
+    | _ -> make_unidentified
+
+  let (|>) x f = f x
+  let of_event evt =
+    Unidentified
+    |> try_next (evt##.code) try_code
+    |> try_key_location evt
+    |> run_next (get_key_code evt) try_key_code_normal
+end
+
+module Keyboard_key = struct
+  type t = Uchar.t option
+
+  let char_of_int value =
+    if 0 < value then
+      try Some (Uchar.of_int value)
+      with _ -> None
+    else None
+
+  let empty_string _ = Js.string ""
+  let none _ = None
+
+  let of_event evt =
+    let key = Optdef.get evt##.key empty_string in
+    match key##.length with
+    | 0 -> Optdef.case evt##.charCode none char_of_int
+    | 1 -> char_of_int (int_of_float (key##charCodeAt 0))
+    | _ -> None
+end
+
+(*****)
 
 let element : #Dom.element t -> element t = Js.Unsafe.coerce
 
@@ -1692,15 +2016,15 @@ type taggedElement =
 let other e = Other (e : #element t :> element t)
 
 let tagged (e : #element t) =
-  let tag = Js.to_bytestring (e##tagName##toLowerCase()) in
+  let tag = Js.to_bytestring (e##.tagName##toLowerCase) in
   if String.length tag = 0 then
     other e
   else
     match String.unsafe_get tag 0 with
       'a' ->
-        begin match tag with
-        | "a" -> A (Js.Unsafe.coerce e)
-        | "area" -> Area (Js.Unsafe.coerce e)
+      begin match tag with
+      | "a" -> A (Js.Unsafe.coerce e)
+      | "area" -> Area (Js.Unsafe.coerce e)
         | "audio" -> Audio (Js.Unsafe.coerce e)
         | _ -> other e
         end
@@ -1857,46 +2181,46 @@ let opt_taggedEvent ev = Opt.case ev (fun () -> None) (fun ev -> Some (taggedEve
 let stopPropagation ev =
   let e = Js.Unsafe.coerce ev in
   Optdef.case
-    (e##stopPropagation)
-    (fun () -> e##cancelBubble <- Js._true)
-    (fun _ -> e##_stopPropagation())
+    (e##.stopPropagation)
+    (fun () -> e##.cancelBubble := Js._true)
+    (fun _ -> e##_stopPropagation)
 
 let _requestAnimationFrame : (unit -> unit) Js.callback -> unit =
   Js.Unsafe.pure_expr
     (fun _ ->
        let w = Js.Unsafe.coerce window in
        let l =
-         [w##requestAnimationFrame;
-          w##mozRequestAnimationFrame;
-          w##webkitRequestAnimationFrame;
-          w##oRequestAnimationFrame;
-          w##msRequestAnimationFrame]
+         [w##.requestAnimationFrame;
+          w##.mozRequestAnimationFrame;
+          w##.webkitRequestAnimationFrame;
+          w##.oRequestAnimationFrame;
+          w##.msRequestAnimationFrame]
        in
        try
          let req = List.find (fun c -> Js.Optdef.test c) l in
          fun callback -> Js.Unsafe.fun_call req [|Js.Unsafe.inject callback|]
        with Not_found ->
-         let now () = jsnew Js.date_now ()##getTime() in
+         let now () = (new%js Js.date_now)##getTime in
          let last = ref (now ()) in
          fun callback ->
            let t = now () in
            let dt = !last +. 1000. /. 60. -. t in
            let dt = if dt < 0. then 0. else dt in
            last := t;
-           ignore (window##setTimeout (callback, dt)))
+           ignore (window##setTimeout callback dt))
 
 (****)
 
 let hasPushState () =
-  Js.Optdef.test ((Js.Unsafe.coerce (window##history))##pushState)
+  Js.Optdef.test ((Js.Unsafe.coerce (window##.history))##.pushState)
 
 let hasPlaceholder () =
  let i = createInput document in
-  Js.Optdef.test ((Js.Unsafe.coerce i)##placeholder)
+  Js.Optdef.test ((Js.Unsafe.coerce i)##.placeholder)
 
 let hasRequired () =
  let i = createInput document in
-  Js.Optdef.test ((Js.Unsafe.coerce i)##required)
+  Js.Optdef.test ((Js.Unsafe.coerce i)##.required)
 
 let overflow_limit = 2147483_000. (* ms *)
 
@@ -1912,7 +2236,7 @@ let setTimeout callback d : timeout_id_safe =
       if remain = 0.
       then callback
       else loop remain in
-    id := Some (window##setTimeout (Js.wrap_callback cb, step))
+    id := Some (window##setTimeout (Js.wrap_callback cb) step)
   in
   loop d ();
   id
@@ -1922,7 +2246,7 @@ let clearTimeout (id : timeout_id_safe) =
   | None -> ()
   | Some x ->
      id:=None;
-     window##clearTimeout(x)
+     window##clearTimeout x
 
 let js_array_of_collection (c : #element collection Js.t) :
   #element Js.t Js.js_array Js.t =

@@ -303,7 +303,7 @@ class type ['a] js_array = object
   method length : int prop
 end
 
-val object_keys : 'a t -> js_string js_array t
+val object_keys : 'a t -> js_string t js_array t
   (** Returns jsarray containing keys of the object as Object.keys does. *)
 
 val array_empty : 'a js_array t constr
@@ -631,6 +631,27 @@ external debugger : unit -> unit = "debugger"
       If no debugging functionality is available, it has no effect.
       In practice, it will insert a "debugger;" statement in the generated javascript. *)
 
+(** {2 Export functionality.}
+    Export values to [module.exports] if it exists or to the global
+    object otherwise.
+*)
+
+(** [export name value] export [name] *)
+val export : string -> 'a -> unit
+
+(** [export_all obj] export every key of [obj] object.
+{[
+export_all
+  object%js
+    method add x y = x +. y
+    method abs x = abs_float x
+    val zero = 0.
+  end
+]}
+*)
+val export_all : 'a t -> unit
+
+
 (** {2 Unsafe operations.} *)
 
 (** Unsafe Javascript operations *)
@@ -638,6 +659,8 @@ module Unsafe : sig
   type any
     (** Top type.  Used for putting values of different types
         in a same array. *)
+
+  type any_js_array = any
 
   external inject : 'a -> any = "%identity"
     (** Coercion to top type. *)
@@ -677,6 +700,11 @@ module Unsafe : sig
         creates a Javascript object with constructor [c] using the
         arguments given by the array [a]. *)
 
+  external new_obj_arr : 'a -> any_js_array -> 'b = "caml_ojs_new_arr"
+    (** Same Create a Javascript object.  The expression [new_obj_arr c a]
+        creates a Javascript object with constructor [c] using the
+        arguments given by the Javascript array [a]. *)
+
   external obj : (string * any) array -> 'a = "caml_js_object"
     (** Creates a Javascript literal object.  The expression
         [obj a] creates a Javascript object whose fields are given by
@@ -707,14 +735,32 @@ module Unsafe : sig
         arguments will be set to [undefined] and extra arguments are
         lost. *)
 
+  external callback_with_arguments : (any_js_array -> 'b) -> ('c, any_js_array -> 'b) meth_callback =
+    "caml_js_wrap_callback_arguments"
+      (** Wrap an OCaml function so that it can be invoked from
+        Javascript. The first parameter of the function will be bound
+        to the [arguments] JavaScript *)
+
+  external callback_with_arity : int -> ('a -> 'b) -> ('c, 'a -> 'b) meth_callback =
+    "caml_js_wrap_callback_strict"
+
   external meth_callback : ('b -> 'a) -> ('b, 'a) meth_callback =
       "caml_js_wrap_meth_callback_unsafe"
     (** Wrap an OCaml function so that it can be invoked from
-        Javascript.  The first parameter of the function will be bound
+        Javascript. The first parameter of the function will be bound
         to the value of the [this] implicit parameter. Contrary to
         [Js.wrap_meth_callback], partial application and
         over-application is not supported: missing arguments will be
         set to [undefined] and extra arguments are lost. *)
+
+  external meth_callback_with_arguments : ('b -> any_js_array -> 'a) -> ('b, any_js_array -> 'a) meth_callback =
+    "caml_js_wrap_meth_callback_arguments"
+  (** Wrap an OCaml function so that it can be invoked from Javascript.
+      The first parameter of the function will be bound to the value of the [this] implicit parameter.
+      The second parameter of the function with be bound to the value of the [arguments]. *)
+
+  external meth_callback_with_arity : int -> ('b -> 'a) -> ('b, 'a) meth_callback =
+    "caml_js_wrap_meth_callback_strict"
 
   (** {3 Deprecated functions.} *)
 

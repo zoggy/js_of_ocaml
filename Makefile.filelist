@@ -1,4 +1,4 @@
-BIN := compiler/${COMPILER} compiler/${MINIFIER}
+BIN := compiler/${COMPILER} compiler/${MINIFIER} compiler/${LINKER}
 
 ifeq "${WITH_TOPLEVEL}" "YES"
 BIN += jsoo_tools/${MKTOP} jsoo_tools/${MKCMIS}
@@ -7,16 +7,18 @@ endif
 INTF := lib/*.cmi
 
 IMPL := lib/$(LIBNAME).cma   \
-        lib/syntax/pa_js.cmo \
         lib/dll$(LIBNAME)$(DLLEXT) \
         lib/lib$(LIBNAME)$(LIBEXT)
 
 INTF += lib/log/*.cmi
 IMPL += lib/log/logger.cma
 
+ifeq "${WITH_CAMLP4}" "YES"
+IMPL += lib/syntax/pa_js.cmo
 ifeq "${BEST}" "opt"
 ifeq "${NATDYNLINK}" "YES"
 IMPL += lib/syntax/pa_js.cmx lib/syntax/pa_js.cmxs
+endif
 endif
 endif
 
@@ -39,9 +41,21 @@ ifeq "${WITH_PPX}" "YES"
 OCAMLFIND_BIN += lib/ppx/${PPX}
 IMPL += lib/ppx/ppx_js.cma
 INTF += lib/ppx/*.cmi
+IMPL += lib/ppx/ppx_js.cmx lib/ppx/ppx_js.cmxa
+IMPL += lib/ppx/ppx_js.a
 ifeq "${BEST}" "opt"
 ifeq "${NATDYNLINK}" "YES"
-IMPL += lib/ppx/ppx_js.cmx lib/ppx/ppx_js.cmxa lib/ppx/ppx_js.cmxs
+IMPL += lib/ppx/ppx_js.cmxs
+endif
+endif
+endif
+
+ifeq "${WITH_PPX}${WITH_PPX_DRIVER}" "YESYES"
+IMPL += lib/ppx_driver/ppx_js_driver.cma lib/ppx_driver/ppx_js_driver.cmx lib/ppx_driver/ppx_js_driver.cmxa
+IMPL += lib/ppx_driver/ppx_js_driver.a
+ifeq "${BEST}" "opt"
+ifeq "${NATDYNLINK}" "YES"
+IMPL += lib/ppx_driver/ppx_js_driver.cmxs
 endif
 endif
 endif
@@ -56,6 +70,8 @@ endif
 ifeq "${WITH_TOPLEVEL}" "YES"
 IMPL += lib/toplevel/jsooTop.cmo lib/toplevel/jsooTopError.cmo
 INTF += lib/toplevel/jsooTop.cmi lib/toplevel/jsooTopError.cmi
+IMPL += lib/toplevel/jsooTopPpx.cmo
+INTF += lib/toplevel/jsooTopPpx.cmi
 ifeq ($(shell ocamlc -version | grep -q -E "4.0[^01]"; echo $$?),0)
 IMPL += lib/toplevel/jsooTopCamlp4.cmo
 endif
@@ -81,18 +97,18 @@ JSOO_RUNTIME_EXTRA := weak.js \
 
 OTHERS := runtime/runtime.js $(addprefix runtime/,$(JSOO_RUNTIME)) $(addprefix runtime/,$(JSOO_RUNTIME_EXTRA))
 
-COMP_INTF := compiler/compiler.cmi
-COMP_IMPL := compiler/compiler.cma
-COMP_NAT_IMPL := compiler/compiler.cmxa compiler/compiler.a compiler/compiler.cmx
-COMP_NATDYN_IMPL := compiler/compiler.cmxs
+COMP_INTF := compiler/lib/js_of_ocaml_compiler.cmi
+COMP_IMPL := compiler/lib/js_of_ocaml_compiler.cma
+COMP_NAT_IMPL := compiler/lib/js_of_ocaml_compiler.cmxa compiler/lib/js_of_ocaml_compiler.a compiler/lib/js_of_ocaml_compiler.cmx
+COMP_NATDYN_IMPL := compiler/lib/js_of_ocaml_compiler.cmxs
 
 ifeq "${WITH_FINDLIB}" "YES"
-COMP_INTF += compiler/jsoo_findlib_support.cmi
-COMP_IMPL += compiler/jsoo_findlib_support.cma
-COMP_NAT_IMPL += compiler/jsoo_findlib_support.cmxa \
-                 compiler/jsoo_findlib_support.a \
-                 compiler/jsoo_findlib_support.cmx
-COMP_NATDYN_IMPL += compiler/jsoo_findlib_support.cmxs
+COMP_INTF += compiler/findlib_support/jsoo_findlib_support.cmi
+COMP_IMPL += compiler/findlib_support/jsoo_findlib_support.cma
+COMP_NAT_IMPL += compiler/findlib_support/jsoo_findlib_support.cmxa \
+                 compiler/findlib_support/jsoo_findlib_support.a \
+                 compiler/findlib_support/jsoo_findlib_support.cmx
+COMP_NATDYN_IMPL += compiler/findlib_support/jsoo_findlib_support.cmxs
 endif
 
 OCAMLBUILD_IMPL := ocamlbuild_js_of_ocaml.cma
@@ -108,17 +124,12 @@ endif
 
 IMPL += $(addprefix ocamlbuild/_build/,$(OCAMLBUILD_IMPL))
 
-ifeq "${WITH_DERIVING}" "YES"
-
 JSON := lib/deriving_json/deriving_Json.cmi       \
         lib/deriving_json/deriving_Json_lexer.cmi
 
 INTF += $(JSON)
-INTF += lib/syntax/pa_deriving_Json.cmi
 
-IMPL += lib/syntax/pa_deriving_Json.cmo \
-        lib/syntax/pa_deriving_Json.cmi \
-        lib/deriving_json.cma
+IMPL += lib/deriving_json.cma
 
 NATIMPL := lib/deriving_json.cmxa     \
 	   lib/deriving_json.cmxs     \
@@ -126,17 +137,24 @@ NATIMPL := lib/deriving_json.cmxa     \
 
 NATIMPL += $(JSON:.cmi=.cmx)
 
+ifeq "${WITH_CAMLP4}${WITH_DERIVING}" "YESYES"
+
+INTF += lib/syntax/pa_deriving_Json.cmi
+
+IMPL += lib/syntax/pa_deriving_Json.cmo \
+        lib/syntax/pa_deriving_Json.cmi
+
 ifeq "${NATDYNLINK}" "YES"
 NATIMPL += lib/syntax/pa_deriving_Json.cmx \
            lib/syntax/pa_deriving_Json.cmxs
 COMP_IMPL += $(COMP_NATDYN_IMPL)
 endif
 
+endif
+
 ifeq "${BEST}" "opt"
 IMPL += $(NATIMPL)
 COMP_IMPL += $(COMP_NAT_IMPL)
-endif
-
 endif
 
 DOC := ${INTF:.cmi=.mli}

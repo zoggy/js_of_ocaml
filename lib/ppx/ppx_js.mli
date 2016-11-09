@@ -4,7 +4,7 @@
     {{:https://github.com/janestreet/camlp4-to-ppx}camlp4-to-ppx},
     which provides built-in support for Js_of_ocaml syntax.
 *)
-
+val wrapper : string option ref
 val js_mapper : string list -> Ast_mapper.mapper
 (**
    A syntax extension is available for manipulating object properties,
@@ -44,7 +44,7 @@ e_i : t_i               (1 <= i <= n)
 constr : (t_1 -> ... -> t_n -> u Js.t) Js.constr
    e_i : t_i               (1 <= i <= n)
 ------------------------------------------------
-          new%js constr e1 ... en : u
+          new%js constr e1 ... en : u Js.t
    ]}
    [ constr ] here must be an identifier. For constructors
    that are not identifiers, bind them first:

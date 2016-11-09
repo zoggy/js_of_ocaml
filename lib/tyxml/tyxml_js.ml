@@ -17,8 +17,8 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-let js_string_of_float f = (Js.number_of_float f)##toString()
-let js_string_of_int i = (Js.number_of_float (float_of_int i))##toString()
+let js_string_of_float f = (Js.number_of_float f)##toString
+let js_string_of_int i = (Js.number_of_float (float_of_int i))##toString
 
 
 module type XML =
@@ -41,18 +41,13 @@ module Xml = struct
   let string_of_uri s = s
   type aname = string
 
-  class type biggest_event = object
-    inherit Dom_html.event
-    inherit Dom_html.mouseEvent
-    inherit Dom_html.keyboardEvent
-  end
-
-  type biggest_event_handler = biggest_event Js.t -> bool
   type event_handler = Dom_html.event Js.t -> bool
   type mouse_event_handler = Dom_html.mouseEvent Js.t -> bool
   type keyboard_event_handler = Dom_html.keyboardEvent Js.t -> bool
   type attrib_k =
-    | Event of biggest_event_handler
+    | Event of event_handler
+    | MouseEvent of mouse_event_handler
+    | KeyboardEvent of keyboard_event_handler
     | Attr of Js.js_string Js.t option React.S.t
   type attrib = aname * attrib_k
 
@@ -63,9 +58,9 @@ module Xml = struct
   let string_attrib name value = attr name (Js.string value)
   let space_sep_attrib name values = attr name (Js.string (String.concat " " values))
   let comma_sep_attrib name values = attr name (Js.string (String.concat "," values))
-  let event_handler_attrib name (value : event_handler) =       name,Event (value :> (biggest_event_handler))
-  let mouse_event_handler_attrib name (value : mouse_event_handler) = name,Event (value :> (biggest_event_handler))
-  let keyboard_event_handler_attrib name (value : keyboard_event_handler) = name,Event (value :> (biggest_event_handler))
+  let event_handler_attrib name (value : event_handler) = name,Event value
+  let mouse_event_handler_attrib name (value : mouse_event_handler) = name,MouseEvent value
+  let keyboard_event_handler_attrib name (value : keyboard_event_handler) = name,KeyboardEvent value
   let uri_attrib name value = attr name (Js.string value)
   let uris_attrib name values = attr name (Js.string (String.concat " " values))
 
@@ -74,7 +69,7 @@ module Xml = struct
   type elt = Dom.node Js.t
   type ename = string
 
-  let empty () = (Dom_html.document##createDocumentFragment() :> Dom.node Js.t)
+  let empty () = (Dom_html.document##createDocumentFragment :> Dom.node Js.t)
 
   let comment c = (Dom_html.document##createComment (Js.string c) :> Dom.node Js.t)
 
@@ -82,7 +77,7 @@ module Xml = struct
   let encodedpcdata s = (Dom_html.document##createTextNode (Js.string s) :> Dom.node Js.t)
   let entity e =
     let entity = Dom_html.decode_html_entities (Js.string ("&" ^ e ^ ";")) in
-    (Dom_html.document##createTextNode(entity) :> Dom.node Js.t)
+    (Dom_html.document##createTextNode entity :> Dom.node Js.t)
 
   (* TODO: fix get_prop
      it only work when html attribute and dom property names correspond.
@@ -107,31 +102,33 @@ module Xml = struct
           (* Note that once we have weak pointers working, we'll need to React.S.retain *)
           let _ : unit React.S.t = React.S.map (function
           | Some v ->
-            ignore(node##setAttribute(n, v));
+            ignore(node##setAttribute n v);
             begin match n' with
-            | "style" -> node##style##cssText <- v;
+            | "style" -> node##.style##.cssText := v;
             | _ -> iter_prop_protected node n (fun name -> Js.Unsafe.set node name v)
             end
           | None ->
-            ignore(node##removeAttribute(n));
+            ignore(node##removeAttribute n);
             begin match n' with
-            | "style" -> node##style##cssText <- Js.string "";
+            | "style" -> node##.style##.cssText := Js.string "";
             | _ -> iter_prop_protected node n (fun name -> Js.Unsafe.set node name Js.null)
             end
           ) a
           in ()
         | Event h -> Js.Unsafe.set node n (fun ev -> Js.bool (h ev))
+        | MouseEvent h -> Js.Unsafe.set node n (fun ev -> Js.bool (h ev))
+        | KeyboardEvent h -> Js.Unsafe.set node n (fun ev -> Js.bool (h ev))
       ) l
 
   let leaf ?(a=[]) name =
-    let e = Dom_html.document##createElement(Js.string name) in
+    let e = Dom_html.document##createElement (Js.string name) in
     attach_attribs e a;
     (e :> Dom.node Js.t)
 
   let node ?(a=[]) name children =
-    let e = Dom_html.document##createElement(Js.string name) in
+    let e = Dom_html.document##createElement (Js.string name) in
     attach_attribs e a;
-    List.iter (fun c -> ignore (e##appendChild(c))) children;
+    List.iter (fun c -> ignore (e##appendChild c)) children;
     (e :> Dom.node Js.t)
 
   let cdata s = pcdata s
@@ -144,40 +141,40 @@ module Xml_Svg = struct
 
   let leaf ?(a = []) name =
     let e =
-      Dom_html.document##createElementNS(Dom_svg.xmlns, Js.string name) in
+      Dom_html.document##createElementNS (Dom_svg.xmlns) (Js.string name) in
     attach_attribs e a;
     (e :> Dom.node Js.t)
 
   let node ?(a = []) name children =
     let e =
-      Dom_html.document##createElementNS(Dom_svg.xmlns, Js.string name) in
+      Dom_html.document##createElementNS (Dom_svg.xmlns) (Js.string name) in
     attach_attribs e a;
-    List.iter (fun c -> ignore (e##appendChild(c))) children;
+    List.iter (fun c -> ignore (e##appendChild c)) children;
     (e :> Dom.node Js.t)
 
 end
 
 
 module Svg = Svg_f.Make(Xml_Svg)
-module Html5 = Html5_f.Make(Xml)(Svg)
-
+module Html = Html_f.Make(Xml)(Svg)
+module Html5 = Html
 
 module To_dom = Tyxml_cast.MakeTo(struct
-    type 'a elt = 'a Html5.elt
-    let elt = Html5.toelt
+    type 'a elt = 'a Html.elt
+    let elt = Html.toelt
   end)
 
 module Of_dom = Tyxml_cast.MakeOf(struct
-    type 'a elt = 'a Html5.elt
-    let elt = Html5.tot
+    type 'a elt = 'a Html.elt
+    let elt = Html.tot
   end)
 
 module Register = struct
 
   let removeChildren (node : #Dom.element Js.t) =
-    let l = node##childNodes in
-    for i = 0 to (l##length) - 1 do
-      Js.Opt.iter l##item(i) (fun x -> ignore node##removeChild(x))
+    let l = node##.childNodes in
+    for i = 0 to (l##.length) - 1 do
+      Js.Opt.iter (l##item i) (fun x -> ignore (node##removeChild x))
     done
 
   let add_to ?(keep=true) node content =
@@ -191,22 +188,22 @@ module Register = struct
     add_to ?keep node content
 
   let body ?keep content =
-    add_to ?keep Dom_html.document##body content
+    add_to ?keep Dom_html.document##.body content
 
   let head ?keep content =
-    add_to ?keep Dom_html.document##head content
+    add_to ?keep Dom_html.document##.head content
 
   let html ?head body =
     begin match head with
-      | Some h -> Dom_html.document##head <- (To_dom.of_head h)
+      | Some h -> Dom_html.document##.head := (To_dom.of_head h)
       | None -> ()
     end ;
-    Dom_html.document##body <- (To_dom.of_body body) ;
+    Dom_html.document##.body := (To_dom.of_body body) ;
     ()
 
 end
 
-module Xml_wrap = struct
+module Wrap = struct
   type 'a t = 'a React.signal
   type 'a tlist = 'a ReactiveData.RList.t
   type ('a, 'b) ft = 'a -> 'b
@@ -224,43 +221,43 @@ module Util = struct
   open RList
 
   let insertAt dom i x =
-    let nodes = dom##childNodes in
-    assert (i <= nodes##length);
-    if i = nodes##length
-    then ignore(dom##appendChild((x :> Dom.node Js.t)))
-    else ignore(dom##insertBefore(x,nodes##item(i)))
+    let nodes = dom##.childNodes in
+    assert (i <= nodes##.length);
+    if i = nodes##.length
+    then ignore(dom##appendChild ((x :> Dom.node Js.t)))
+    else ignore(dom##insertBefore x (nodes##item i))
 
   let merge_one_patch (dom : Dom.node Js.t) (p : Dom.node Js.t p) =
     match p with
     | I (i,x) ->
-      let i = if i < 0 then dom##childNodes##length + 1 + i else i in
+      let i = if i < 0 then dom##.childNodes##.length + 1 + i else i in
       insertAt dom i x
     | R i ->
-      let i = if i < 0 then dom##childNodes##length + i else i in
-      let nodes = dom##childNodes in
-      assert (i >= 0 && i < nodes##length);
-      Js.Opt.iter (nodes##item(i)) (fun n -> Dom.removeChild dom n)
+      let i = if i < 0 then dom##.childNodes##.length + i else i in
+      let nodes = dom##.childNodes in
+      assert (i >= 0 && i < nodes##.length);
+      Js.Opt.iter (nodes##item i) (fun n -> Dom.removeChild dom n)
     | U (i,x) ->
-      let i = if i < 0 then dom##childNodes##length + i else i in
-      (match Js.Opt.to_option dom##childNodes##item(i) with
-       | Some old -> ignore(dom##replaceChild(x,old))
+      let i = if i < 0 then dom##.childNodes##.length + i else i in
+      (match Js.Opt.to_option (dom##.childNodes##item i) with
+       | Some old -> ignore(dom##replaceChild x old)
        | _ -> assert false)
     | X (i,move) ->
-      let i = if i < 0 then dom##childNodes##length + i else i in
+      let i = if i < 0 then dom##.childNodes##.length + i else i in
       if move = 0
       then ()
       else
         begin
-          match Js.Opt.to_option dom##childNodes##item(i) with
+          match Js.Opt.to_option (dom##.childNodes##item i) with
           | Some i' -> insertAt dom (i+ if move > 0 then move + 1 else move) i'
           | _ -> assert false
         end
 
   let rec removeChildren dom =
-    match Js.Opt.to_option dom##lastChild with
+    match Js.Opt.to_option dom##.lastChild with
     | None -> ()
     | Some c ->
-      ignore(dom##removeChild(c));
+      ignore(dom##removeChild c);
       removeChildren dom
 
   let merge_msg (dom : Dom.node Js.t) (msg : Dom.node Js.t msg)  =
@@ -268,7 +265,7 @@ module Util = struct
     | Set l ->
       (* Format.eprintf "replace all@."; *)
       removeChildren dom;
-      List.iter (fun l -> ignore(dom##appendChild(l))) l;
+      List.iter (fun l -> ignore(dom##appendChild l)) l;
     | Patch p ->
       (* Format.eprintf "patch@."; *)
       List.iter (merge_one_patch dom) p
@@ -285,7 +282,9 @@ module R = struct
 
   let filter_attrib (name,a) on =
     match a with
-    | Xml.Event _ ->
+    | Xml.Event _
+    | Xml.MouseEvent _
+    | Xml.KeyboardEvent _ ->
       raise (Invalid_argument "filter_attrib not implemented for event handler")
     | Xml.Attr a ->
       name,
@@ -296,7 +295,7 @@ module R = struct
   let attach_attribs = Xml.attach_attribs
 
   module Xml = struct
-    module W = Xml_wrap
+    module W = Wrap
     type 'a wrap = 'a W.t
     type 'a list_wrap = 'a W.tlist
     type uri = Xml.uri
@@ -329,14 +328,14 @@ module R = struct
     let empty = Xml.empty
     let comment = Xml.comment
     let pcdata s =
-      let e = Dom_html.document##createTextNode(Js.string "") in
-      let _ = React.S.map (fun s -> e##data <- Js.string s) s in
+      let e = Dom_html.document##createTextNode (Js.string "") in
+      let _ = React.S.map (fun s -> e##.data := Js.string s) s in
       (e :> Dom.node Js.t)
     let encodedpcdata s = pcdata s
     let entity s = Xml.entity s
     let leaf = Xml.leaf
     let node ?(a=[]) name l =
-      let e = Dom_html.document##createElement(Js.string name) in
+      let e = Dom_html.document##createElement (Js.string name) in
       attach_attribs e a;
       Util.update_children (e :> Dom.node Js.t) l;
       (e :> Dom.node Js.t)
@@ -352,13 +351,14 @@ module R = struct
 
     let node ?(a = []) name l =
       let e =
-        Dom_html.document##createElementNS(Dom_svg.xmlns,Js.string name) in
+        Dom_html.document##createElementNS (Dom_svg.xmlns) (Js.string name) in
       attach_attribs e a;
       Util.update_children (e :> Dom.node Js.t) l;
       (e :> Dom.node Js.t)
   end
 
   module Svg = Svg_f.Make(Xml_Svg)
-  module Html5 = Html5_f.Make(Xml)(Svg)
+  module Html = Html_f.Make(Xml)(Svg)
+  module Html5 = Html
 
 end

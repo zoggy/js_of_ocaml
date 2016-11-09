@@ -18,8 +18,10 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-let times = Option.Debug.find "times"
+open Js_of_ocaml_compiler
 
+let times = Option.Debug.find "times"
+let debug_mem = Option.Debug.find "mem"
 let _ = Sys.catch_break true
 
 let temp_file_name =
@@ -48,10 +50,17 @@ let f {
     CompileArg.common;
     profile; source_map; runtime_files; input_file; output_file;
     params ; static_env;
-    linkall; toplevel; nocmis;
+    wrap_with_fun;
+    dynlink; linkall; toplevel; nocmis; runtime_only;
     include_dir; fs_files; fs_output; fs_external } =
+  let dynlink = dynlink || toplevel || runtime_only in
   let custom_header = common.CommonArg.custom_header in
+  let global = if wrap_with_fun then `Function else `Auto in
   CommonArg.eval common;
+  begin match output_file with
+  | None | Some "" | Some "-" -> ()
+  | Some name when debug_mem () -> Option.start_profiling name
+  | Some _ -> () end;
   List.iter (fun (s,v) -> Option.Param.set s v) params;
   List.iter (fun (s,v) -> Eval.set_static_env s v) static_env;
   let t = Util.Timer.make () in
@@ -78,22 +87,25 @@ let f {
     if Option.Optim.pretty () then `Names else `No
   in
   let p, cmis, d, standalone =
+    if runtime_only
+    then Code.empty, Util.StringSet.empty, Parse_bytecode.Debug.create (), true
+    else
     match input_file with
       None ->
-        Parse_bytecode.from_channel ~includes:paths ~toplevel ~debug:need_debug stdin
+        Parse_bytecode.from_channel ~includes:paths ~toplevel ~dynlink ~debug:need_debug stdin
     | Some f ->
         let ch = open_in_bin f in
-        let res = Parse_bytecode.from_channel ~includes:paths ~toplevel ~debug:need_debug ch in
+        let res = Parse_bytecode.from_channel ~includes:paths ~toplevel ~dynlink ~debug:need_debug ch in
         close_in ch;
         res
   in
   let () =
-    if source_map <> None &&  Parse_bytecode.Debug.is_empty d
+    if not runtime_only && source_map <> None &&  Parse_bytecode.Debug.is_empty d
     then
       Util.warn
-	"Warning: '--source-map' is enabled but the bytecode program \
-	 was compiled with no debugging information.\n\
-	 Warning: Consider passing '-g' option to ocamlc.\n%!"
+        "Warning: '--source-map' is enabled but the bytecode program \
+         was compiled with no debugging information.\n\
+         Warning: Consider passing '-g' option to ocamlc.\n%!"
   in
   let cmis = if nocmis then Util.StringSet.empty else cmis in
   let p =
@@ -109,7 +121,7 @@ let f {
     | None ->
       let p = PseudoFs.f p cmis fs_files paths in
       let fmt = Pretty_print.to_out_channel stdout in
-      Driver.f ~standalone ?profile ~toplevel ~linkall
+      Driver.f ~standalone ?profile ~linkall ~global ~dynlink
         ?source_map ?custom_header fmt d p
     | Some file ->
       gen_file file (fun chan ->
@@ -118,18 +130,19 @@ let f {
             then PseudoFs.f p cmis fs_files paths
             else p in
           let fmt = Pretty_print.to_out_channel chan in
-          Driver.f ~standalone ?profile ~toplevel ~linkall
+          Driver.f ~standalone ?profile ~linkall ~global ~dynlink
             ?source_map ?custom_header fmt d p;
         );
       Util.opt_iter (fun file ->
           gen_file file (fun chan ->
               let pfs = PseudoFs.f_empty cmis fs_files paths in
               let pfs_fmt = Pretty_print.to_out_channel chan in
-              Driver.f ~standalone ?profile ?custom_header pfs_fmt d pfs
+              Driver.f ~standalone ?profile ?custom_header ~global pfs_fmt d pfs
             )
         ) fs_output
   end;
-  if times () then Format.eprintf "compilation: %a@." Util.Timer.print t
+  if times () then Format.eprintf "compilation: %a@." Util.Timer.print t;
+  Option.stop_profiling ()
 
 let main =
   Cmdliner.Term.(pure f $ CompileArg.options),

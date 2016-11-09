@@ -34,18 +34,18 @@ endif
 doc: api/html/index.html
 api/html/index.html: ${MLIS} api/index
 	mkdir -p api/html
-	ocamlfind ocamldoc ${DOCOPT} -package lwt,ocamlbuild ${OTHER} -intro api/index -html \
+	ocamlfind ocamldoc ${DOCOPT} -package lwt,ocamlbuild,uchar ${OTHER} -intro api/index -html \
 	   -d api/html -I ../lib -I ../lib/deriving_json ${MLIS}
 
 wikidoc: api/wiki/index.wiki cp-examples
 api/wiki/index.wiki: ${MLIS} api/index
 	mkdir -p api/wiki
-	ocamlfind ocamldoc ${DOCOPT} -package lwt,ocamlbuild ${OTHER} -intro api/index \
+	ocamlfind ocamldoc ${DOCOPT} -package lwt,ocamlbuild,uchar ${OTHER} -intro api/index \
 	   -d api/wiki -I ../lib -I ../lib/deriving_json -I ../lib/syntax \
 	   -i $(shell ocamlfind query wikidoc) -g odoc_wiki.cma \
 	   ${MLIS}
 
-EX_TOPLEVEL:=index.html toplevel.js *.cmis.js
+EX_TOPLEVEL:=index.html toplevel.js test_dynlink.js *.cmis.js
 EX_BOULDER:=index.html boulderdash.js sprites
 EX_WEBGL:=index.html webgldemo.js
 EX_GRAPH:=index.html jsviewer.js
